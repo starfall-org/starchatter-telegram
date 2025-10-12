@@ -1,10 +1,8 @@
-from telethon import events, TelegramClient
+from ai.base import BaseFactory
+from database.client import ChatSession
+from pyrogram import Client, filters, types  # pyright: ignore[reportPrivateImportUsage]
 
 
-def register(
-    client: TelegramClient,
-):
-    @client.on(events.NewMessage(incoming=True))
-    async def handle_incoming_message(event):
-        # Handle incoming messages here
-        pass
+@Client.on_message(filters=filters.text)  # pyright: ignore[reportArgumentType]
+async def start(client: Client, message: types.Message):
+    await message.reply("Hello! I'm your bot. How can I assist you today?")

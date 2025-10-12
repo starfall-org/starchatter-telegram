@@ -7,6 +7,27 @@ class Base(DeclarativeBase):
     pass
 
 
+class LLMConfig(Base):
+    __tablename__ = "llm_config"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    model: Mapped[str] = mapped_column(String(100), nullable=True)
+    instructions: Mapped[str] = mapped_column(String(10000), nullable=True)
+    provider_id: Mapped[int] = mapped_column(
+        ForeignKey("llm_provider.id"), nullable=True
+    )
+    provider: Mapped["LLMProvider"] = relationship("LLMProvider", backref="llm_config")
+
+
+class LLMProvider(Base):
+    __tablename__ = "llm_provider"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), unique=True)
+    api_key: Mapped[str] = mapped_column(String(100))
+    base_url: Mapped[str] = mapped_column(String(100))
+
+
 class User(Base):
     __tablename__ = "users"
 

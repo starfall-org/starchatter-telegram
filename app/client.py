@@ -1,4 +1,5 @@
-from telethon import TelegramClient
-from .config import API_ID, API_HASH
+from pyrogram import Client  # pyright: ignore[reportPrivateImportUsage]
 
-client = TelegramClient("telegram-manager", API_ID, API_HASH)
+from .config import API_HASH, API_ID, BOT_TOKEN
+
+client = Client("starchatter", API_ID, API_HASH, bot_token=BOT_TOKEN)
