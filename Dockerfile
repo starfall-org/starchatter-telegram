@@ -12,4 +12,6 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
+EXPOSE 7860
+
 CMD python health.py & python app/main.py

@@ -1,6 +1,5 @@
-from sqlalchemy import String, ForeignKey, DateTime
+from sqlalchemy import String, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
-from datetime import datetime
 
 
 class Base(DeclarativeBase):
@@ -68,6 +67,4 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(32))
     content: Mapped[str] = mapped_column(String(10000))
     chat_session_id: Mapped[int] = mapped_column(ForeignKey("chat_sessions.id"))
-    chat_session: Mapped["ChatSession"] = relationship(
-        "ChatSession", backref="messages"
-    )
+    chat_session: Mapped[ChatSession] = relationship("ChatSession", backref="messages")
