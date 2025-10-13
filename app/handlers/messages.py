@@ -6,9 +6,7 @@ base = BaseFactory()
 
 @Client.on_message(filters=filters.text)
 async def chatbot_handler(client: Client, message: types.Message):
-    await message.reply_chat_action(
-        enums.ChatAction.TYPING,
-    )
+    await message.reply_chat_action(enums.ChatAction.TYPING)
 
     content = await base.chat(message.text, message.chat.id, message.from_user.id)
 

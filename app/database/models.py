@@ -35,7 +35,7 @@ class User(Base):
     username: Mapped[str] = mapped_column(String(100), unique=True)
     full_name: Mapped[str] = mapped_column(String(100))
     channels: Mapped[list["Channel"]] = relationship(
-        "Channel", backref="owner", cascade="all, delete-orphan"
+        "Channel", back_populates="owner", cascade="all, delete-orphan"
     )
 
 
@@ -46,7 +46,7 @@ class Channel(Base):
     telegram_id: Mapped[int] = mapped_column(unique=True)
     title: Mapped[str] = mapped_column(String(100))
     username: Mapped[str] = mapped_column(String(32), unique=True, nullable=True)
-    owner: Mapped["User"] = relationship(User, backref="channels")
+    owner: Mapped["User"] = relationship(User, back_populates="channels")
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
 
@@ -56,7 +56,7 @@ class ChatSession(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     chat_id: Mapped[int] = mapped_column()
     messages: Mapped[list["ChatMessage"]] = relationship(
-        "ChatMessage", backref="chat_session", cascade="all, delete-orphan"
+        "ChatMessage", back_populates="chat_session", cascade="all, delete-orphan"
     )
 
 
@@ -67,4 +67,6 @@ class ChatMessage(Base):
     role: Mapped[str] = mapped_column(String(32))
     content: Mapped[str] = mapped_column(String(10000))
     chat_session_id: Mapped[int] = mapped_column(ForeignKey("chat_sessions.id"))
-    chat_session: Mapped[ChatSession] = relationship("ChatSession", backref="messages")
+    chat_session: Mapped[ChatSession] = relationship(
+        "ChatSession", back_populates="messages"
+    )
