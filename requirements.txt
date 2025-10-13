@@ -1,5 +1,5 @@
 openai==2.3.0
 sqlalchemy-libsql
 TgCrypto==1.2.5
-pyroblack
+pyrofork
 flask
