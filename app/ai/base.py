@@ -31,7 +31,6 @@ class BaseFactory:
             chat_messages = [ChatMessage(role="user", content=message)]
             chat_session = ChatSession(
                 chat_id=chat_id,
-                user_id=user_id,
                 messages=chat_messages,
             )
             await self.base.add_chat_session(chat_session)
