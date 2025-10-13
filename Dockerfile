@@ -14,4 +14,4 @@ COPY . .
 
 EXPOSE 7860
 
-CMD python health.py & python app/main.py
+CMD python health.py & cd app && python main.py

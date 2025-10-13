@@ -1,5 +1,5 @@
 from ai.base import BaseFactory
-from pyrogram import (  # pyright: ignore[reportPrivateImportUsage]
+from pyrogram import (
     Client,
     enums,
     filters,
@@ -9,7 +9,7 @@ from pyrogram import (  # pyright: ignore[reportPrivateImportUsage]
 base = BaseFactory()
 
 
-@Client.on_message(filters=filters.text)  # pyright: ignore[reportArgumentType]
+@Client.on_message(filters=filters.text)
 async def start(client: Client, message: types.Message):
     await message.reply_chat_action(
         enums.ChatAction.TYPING,
