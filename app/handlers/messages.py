@@ -5,7 +5,9 @@ base = BaseFactory()
 
 
 @Client.on_message(
-    filters.text & (filters.private | (filters.mentioned | filters.reply))
+    filters.text
+    & (filters.private | (filters.mentioned | filters.reply))
+    & ~filters.create(lambda _, __, m: m.text.startswith("/"))
 )
 async def chatbot_handler(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)
