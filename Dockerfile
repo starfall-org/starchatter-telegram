@@ -1,6 +1,6 @@
-FROM python
+FROM python:3.11
 
-RUN useradd -m -s /bin/bashn -u 1000 user
+RUN useradd -m -s /bin/bash -u 1000 user
 
 WORKDIR /home/user
 
