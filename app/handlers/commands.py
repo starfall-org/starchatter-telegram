@@ -10,6 +10,13 @@ async def start(client: Client, message: types.Message):
     await message.reply("Welcome to StarChatter. How can I help you?")
 
 
+@Client.on_message(filters.command("help"))
+async def help(client: Client, message: types.Message):
+    await message.reply(
+        "Available commands: /start, /help, /add_channel, /get_channel, /add_provider, /get_providers, /set_provider, /get_config, /edit_config"
+    )
+
+
 @Client.on_message(filters.command("edit_config"))
 async def edit_config(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)

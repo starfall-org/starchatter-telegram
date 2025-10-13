@@ -5,7 +5,7 @@ base = BaseFactory()
 
 
 @Client.on_message(
-    filters=filters.text & (filters.private | (filters.mentioned | filters.reply)),
+    filters.text & (filters.private | (filters.mentioned | filters.reply)),
     group=1,
 )
 async def chatbot_handler(client: Client, message: types.Message):
