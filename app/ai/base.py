@@ -23,6 +23,7 @@ class BaseFactory:
                 )
         else:
             model = AI_MODEL
+            instructions = ""
         if chat_session:
             await self.base.update_chat_session(chat_session)
             chat_messages = chat_session.messages
@@ -35,12 +36,13 @@ class BaseFactory:
             )
             await self.base.add_chat_session(chat_session)
         messages = [
-            {"role": "system", "content": instructions},
+            *{"role": "system", "content": f"You are StarChatter. {instructions}"},
             *({"role": cm.role, "content": cm.content} for cm in chat_messages),
         ]
         response = await self.client.chat.completions.create(
             model=model, messages=messages
         )
+
         content = response.choices[0].message.content
         chat_messages.append(ChatMessage(role="assistant", content=content))
         await self.base.update_chat_session(chat_session)
