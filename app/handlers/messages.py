@@ -6,7 +6,6 @@ base = BaseFactory()
 
 @Client.on_message(
     filters.text & (filters.private | (filters.mentioned | filters.reply)),
-    group=1,
 )
 async def chatbot_handler(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)
