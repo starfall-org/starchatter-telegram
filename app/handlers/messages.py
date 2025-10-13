@@ -1,16 +1,11 @@
 from ai.base import BaseFactory
-from pyrogram import (
-    Client,
-    enums,
-    filters,
-    types,
-)
+from pyrogram import Client, enums, filters, types
 
 base = BaseFactory()
 
 
 @Client.on_message(filters=filters.text)
-async def start(client: Client, message: types.Message):
+async def chatbot_handler(client: Client, message: types.Message):
     await message.reply_chat_action(
         enums.ChatAction.TYPING,
     )

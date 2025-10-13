@@ -22,6 +22,14 @@ async def edit_config(client: Client, message: types.Message):
     await message.reply("Config updated successfully!")
 
 
+@Client.on_message(filters.command("set_provider"))
+async def set_provider(client: Client, message: types.Message):
+    await message.reply_chat_action(enums.ChatAction.TYPING)
+    provider_id = (await message.ask("Enter provider ID")).text
+    await db.edit_llm_config(provider_id=int(provider_id))
+    await message.reply("Provider set successfully!")
+
+
 @Client.on_message(filters.command("get_config"))
 async def get_config(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)
@@ -46,7 +54,9 @@ async def add_provider(client: Client, message: types.Message):
 async def get_providers(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)
     providers = await db.get_providers()
-    await message.reply("\n".join([f"{provider.name}" for provider in providers]))
+    await message.reply(
+        "\n".join([f"{provider.name} (`{provider.id}`)" for provider in providers])
+    )
 
 
 @Client.on_message(filters.command("add_channel"))
