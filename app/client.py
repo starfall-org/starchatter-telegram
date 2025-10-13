@@ -1,6 +1,6 @@
 from pyrogram import Client
 
-from .config import API_HASH, API_ID, BOT_TOKEN
+from config import API_HASH, API_ID, BOT_TOKEN
 
 client = Client(
     "starchatter",
