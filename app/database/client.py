@@ -6,10 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from typing_extensions import Self
 
-from .models import Base, LLMConfig, LLMProvider, User, UserChat
+from .models import Base, ChatSession, LLMConfig, LLMProvider, User
 
 
-class ChatSession:
+class Database:
     _timeout = timedelta(minutes=5)
     Session: async_sessionmaker
 
@@ -59,6 +59,7 @@ class ChatSession:
             await conn.run_sync(Base.metadata.create_all)
 
     async def _auto_close(self):
+        await self.create_all()
         while True:
             await asyncio.sleep(60)
             if datetime.now() - self._last_used > self._timeout:
@@ -99,6 +100,18 @@ class ChatSession:
             session.add(provider)
             await session.commit()
 
+    async def get_provider(self, provider_id):
+        async with self.Session() as session:
+            result = await session.execute(
+                select(LLMProvider).where(LLMProvider.id == provider_id)
+            )
+            return result.scalars().first()
+
+    async def update_provider(self, provider):
+        async with self.Session() as session:
+            session.merge(provider)
+            await session.commit()
+
     async def get_providers(self):
         async with self.Session() as session:
             result = await session.execute(select(LLMProvider))
@@ -114,9 +127,9 @@ class ChatSession:
             session.add(user)
             await session.commit()
 
-    async def add_userchat(self, userchat: UserChat):
+    async def update_user(self, user: User):
         async with self.Session() as session:
-            session.add(userchat)
+            session.merge(user)
             await session.commit()
 
     async def get_user(self, user_id: int) -> User | None:
@@ -124,11 +137,19 @@ class ChatSession:
             result = await session.execute(select(User).where(User.id == user_id))
             return result.scalars().first()
 
-    async def get_userchat(self, user_id: int, chat_id: int) -> UserChat | None:
+    async def add_chat_session(self, chat_session: ChatSession):
+        async with self.Session() as session:
+            session.add(chat_session)
+            await session.commit()
+
+    async def update_chat_session(self, chat_session: ChatSession):
+        async with self.Session() as session:
+            session.merge(chat_session)
+            await session.commit()
+
+    async def get_chat_session(self, chat_id: int) -> ChatSession | None:
         async with self.Session() as session:
             result = await session.execute(
-                select(UserChat).where(
-                    UserChat.user_id == user_id, UserChat.chat_id == chat_id
-                )
+                select(ChatSession).where(ChatSession.chat_id == chat_id)
             )
             return result.scalars().first()

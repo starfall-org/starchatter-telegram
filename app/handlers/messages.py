@@ -1,8 +1,22 @@
 from ai.base import BaseFactory
-from database.client import ChatSession
-from pyrogram import Client, filters, types  # pyright: ignore[reportPrivateImportUsage]
+from pyrogram import (  # pyright: ignore[reportPrivateImportUsage]
+    Client,
+    enums,
+    filters,
+    types,
+)
+
+base = BaseFactory()
 
 
 @Client.on_message(filters=filters.text)  # pyright: ignore[reportArgumentType]
 async def start(client: Client, message: types.Message):
-    await message.reply("Hello! I'm your bot. How can I assist you today?")
+    await message.reply_chat_action(
+        enums.ChatAction.TYPING,
+    )
+
+    content = await base.chat(message.text, message.chat.id, message.from_user.id)
+
+    await message.reply(
+        content or "Something went wrong!", reply_to_message_id=message.id
+    )
