@@ -62,7 +62,17 @@ async def get_providers(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)
     providers = await db.get_providers()
     await message.reply(
-        "\n".join([f"{provider.name} (`{provider.id}`)" for provider in providers])
+        "Below is the list of providers\n",
+        reply_markup=types.InlineKeyboardMarkup(
+            [
+                [
+                    types.InlineKeyboardButton(
+                        text=provider.name, callback_data=str(provider.id)
+                    )
+                    for provider in providers
+                ]
+            ]
+        ),
     )
 
 
