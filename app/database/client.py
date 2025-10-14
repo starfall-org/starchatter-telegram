@@ -137,6 +137,9 @@ class Database:
         await to_thread(self.Session().commit)
 
     async def update_chat_session(self, chat_session: ChatSession):
+        if chat_session:
+            if len(chat_session.messages) > 30:
+                chat_session.messages.pop(0)
         await to_thread(self.Session().merge, chat_session)
         await to_thread(self.Session().commit)
 
