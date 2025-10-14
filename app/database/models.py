@@ -1,4 +1,4 @@
-from sqlalchemy import String, ForeignKey
+from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -6,15 +6,115 @@ class Base(DeclarativeBase):
     pass
 
 
+# --- Association tables (với cờ is_admin, is_owner) ---
+
+class GroupMember(Base):
+    __tablename__ = "group_members"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("telegram_users.id"), primary_key=True)
+    group_id: Mapped[int] = mapped_column(
+        ForeignKey("telegram_groups.id"), primary_key=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    user: Mapped["TelegramUser"] = relationship(back_populates="group_links")
+    group: Mapped["TelegramGroup"] = relationship(back_populates="user_links")
+
+
+class ChannelMember(Base):
+    __tablename__ = "channel_members"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("telegram_users.id"), primary_key=True)
+    channel_id: Mapped[int] = mapped_column(
+        ForeignKey("telegram_channels.id"), primary_key=True)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_owner: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    user: Mapped["TelegramUser"] = relationship(back_populates="channel_links")
+    channel: Mapped["TelegramChannel"] = relationship(
+        back_populates="user_links")
+
+
+# --- Main entities ---
+
+class TelegramUser(Base):
+    __tablename__ = "telegram_users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, unique=True)
+    username: Mapped[str] = mapped_column(
+        String(100), unique=True, nullable=True)
+    first_name: Mapped[str] = mapped_column(String(100))
+    last_name: Mapped[str] = mapped_column(String(100), nullable=True)
+
+    group_links: Mapped[list["GroupMember"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan")
+    channel_links: Mapped[list["ChannelMember"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan")
+
+    groups: Mapped[list["TelegramGroup"]] = relationship(
+        secondary="group_members", viewonly=True
+    )
+    channels: Mapped[list["TelegramChannel"]] = relationship(
+        secondary="channel_members", viewonly=True
+    )
+
+
+class TelegramGroup(Base):
+    __tablename__ = "telegram_groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True,  unique=True)
+    title: Mapped[str] = mapped_column(String(100))
+    username: Mapped[str] = mapped_column(
+        String(32), unique=True, nullable=True)
+    disable_chatbot: Mapped[bool] = mapped_column(Boolean, default=False)
+    disable_anti_spam: Mapped[bool] = mapped_column(Boolean, default=False)
+    user_links: Mapped[list["GroupMember"]] = relationship(
+        back_populates="group", cascade="all, delete-orphan")
+    users: Mapped[list["TelegramUser"]] = relationship(
+        secondary="group_members", viewonly=True
+    )
+
+
+class TelegramChannel(Base):
+    __tablename__ = "telegram_channels"
+
+    id: Mapped[int] = mapped_column(primary_key=True, unique=True)
+    title: Mapped[str] = mapped_column(String(100))
+    username: Mapped[str] = mapped_column(
+        String(32), unique=True, nullable=True)
+
+    user_links: Mapped[list["ChannelMember"]] = relationship(
+        back_populates="channel", cascade="all, delete-orphan")
+    users: Mapped[list["TelegramUser"]] = relationship(
+        secondary="channel_members", viewonly=True
+    )
+
+
 class LLMProvider(Base):
-    __tablename__ = "llm_provider"
+    __tablename__ = "llm_providers"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(100), unique=True)
-    api_key: Mapped[str] = mapped_column(String(100))
-    base_url: Mapped[str] = mapped_column(String(100))
-    llm_config: Mapped[list["LLMConfig"]] = relationship(
-        "LLMConfig", back_populates="provider", cascade="all, delete-orphan"
+    api_key: Mapped[str] = mapped_column(String(200))
+    base_url: Mapped[str] = mapped_column(String(200))
+    models: Mapped[list["LLMModel"]] = relationship(
+        "LLMModel", back_populates="provider"
+    )
+
+
+class LLMModel(Base):
+    __tablename__ = "llm_model"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    model_name: Mapped[str] = mapped_column(String(200), unique=True)
+    model_id: Mapped[str] = mapped_column(String(200), unique=True, index=True)
+    provider_id: Mapped[int] = mapped_column(
+        ForeignKey("llm_providers.id"), nullable=True
+    )
+    provider: Mapped["LLMProvider"] = relationship(
+        "LLMProvider", back_populates="models"
     )
 
 
@@ -22,56 +122,16 @@ class LLMConfig(Base):
     __tablename__ = "llm_config"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    model: Mapped[str] = mapped_column(String(100), nullable=True)
-    instructions: Mapped[str] = mapped_column(String(10000), nullable=True)
+    instructions: Mapped[str] = mapped_column(String(2000), nullable=True)
+    model_id: Mapped[str] = mapped_column(
+        ForeignKey("llm_model.model_id"), nullable=True
+    )
     provider_id: Mapped[int] = mapped_column(
-        ForeignKey("llm_provider.id"), nullable=True
-    )
-    provider: Mapped["LLMProvider"] = relationship(
-        "LLMProvider", back_populates="llm_config"
+        ForeignKey("llm_providers.id"), nullable=True
     )
 
-
-class User(Base):
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    telegram_id: Mapped[int] = mapped_column(unique=True)
-    username: Mapped[str] = mapped_column(String(100), unique=True)
-    full_name: Mapped[str] = mapped_column(String(100))
-    channels: Mapped[list["Channel"]] = relationship(
-        "Channel", back_populates="owner", cascade="all, delete-orphan"
+    model: Mapped["LLMModel"] = relationship(
+        "LLMModel",
+        primaryjoin="LLMConfig.model_id == LLMModel.model_id",
     )
-
-
-class Channel(Base):
-    __tablename__ = "channels"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    telegram_id: Mapped[int] = mapped_column(unique=True)
-    title: Mapped[str] = mapped_column(String(100))
-    username: Mapped[str] = mapped_column(String(32), unique=True, nullable=True)
-    owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-    owner: Mapped["User"] = relationship("User", back_populates="channels")
-
-
-class ChatSession(Base):
-    __tablename__ = "chat_sessions"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    chat_id: Mapped[int] = mapped_column()
-    messages: Mapped[list["ChatMessage"]] = relationship(
-        "ChatMessage", back_populates="chat_session", cascade="all, delete-orphan"
-    )
-
-
-class ChatMessage(Base):
-    __tablename__ = "chat_messages"
-
-    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    role: Mapped[str] = mapped_column(String(32))
-    content: Mapped[str] = mapped_column(String(10000))
-    chat_session_id: Mapped[int] = mapped_column(ForeignKey("chat_sessions.id"))
-    chat_session: Mapped["ChatSession"] = relationship(
-        "ChatSession", back_populates="messages"
-    )
+    provider: Mapped["LLMProvider"] = relationship("LLMProvider")

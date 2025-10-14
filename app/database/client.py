@@ -1,52 +1,59 @@
 import asyncio
 from datetime import datetime, timedelta
-
 from config import TURSO_AUTH_TOKEN, TURSO_DB_URL
-from sqlalchemy import select, create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
-from typing_extensions import Self
-from asyncio import to_thread
-from .models import Base, ChatSession, LLMConfig, LLMProvider, User
 
 
 class Database:
+    _instance = None
     _timeout = timedelta(minutes=5)
-    Session: sessionmaker
 
-    def __new__(cls) -> Self:
-        if not hasattr(cls, "_instance"):
+    def __new__(cls):
+        if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self):
-        if hasattr(self, "_initialized") and self._initialized:
+        if getattr(self, "_initialized", False):
             return
+        self._engine = None
+        self._sessionmaker = None
+        self._session = None
+        self._disposed = True
         self._last_used = datetime.now()
-        self._disposed = False
-        self._create_engine()
-        self.Session = self._wrap_session()
         self._closing_task = asyncio.create_task(self._auto_close())
         self._initialized = True
 
     def _create_engine(self):
         self._engine = create_engine(
-            TURSO_DB_URL, connect_args={"auth_token": TURSO_AUTH_TOKEN}
+            TURSO_DB_URL,
+            connect_args={
+                "auth_token": TURSO_AUTH_TOKEN} if TURSO_AUTH_TOKEN else {},
         )
+        self._sessionmaker = sessionmaker(self._engine, expire_on_commit=False)
         self._disposed = False
 
-    def _wrap_session(self):
-        """Trả về async_sessionmaker tự động reset timer và tái tạo engine nếu cần"""
-        parent = self
+    def _get_session(self) -> Session | None:
+        if self._disposed or self._engine is None:
+            self._create_engine()
+        self._last_used = datetime.now()
+        if self._session is None or not self._session.is_active:
+            if self._sessionmaker:
+                self._session = self._sessionmaker()
+        if self._session:
+            return self._session
 
-        class AutoSession(sessionmaker):
-            def __call__(self, *args, **kwargs) -> Session:
-                parent._last_used = datetime.now()
-                if parent._disposed:
-                    parent._create_engine()
-                    self.bind = parent._engine
-                return super().__call__(*args, **kwargs)
-
-        return AutoSession(self._engine, expire_on_commit=False)
+    async def _auto_close(self):
+        while True:
+            await asyncio.sleep(60)
+            now = datetime.now()
+            if self._session and (now - self._last_used > self._timeout):
+                await asyncio.to_thread(self._session.close)
+                self._session = None
+            if not self._disposed and self._engine and (now - self._last_used > self._timeout):
+                self._engine.dispose()
+                self._disposed = True
 
     @property
     def engine(self):
@@ -54,98 +61,29 @@ class Database:
             self._create_engine()
         return self._engine
 
-    async def create_all(self):
-        Base.metadata.create_all(self.engine)
+    async def _run_in_session(self, func, *args, **kwargs):
+        s = self._get_session()
+        self._last_used = datetime.now()
+        try:
+            return await asyncio.to_thread(func, s, *args, **kwargs)
+        finally:
+            # không đóng ngay, để auto_close làm nhiệm vụ sau 5 phút
+            pass
 
-    async def _auto_close(self):
-        await self.create_all()
-        while True:
-            await asyncio.sleep(60)
-            if datetime.now() - self._last_used > self._timeout:
-                self.engine.dispose()
-                self._disposed = True
-                break
+    async def get(self, model, *args, **kwargs):
+        return await self.execute(select(model).filter_by(*args, **kwargs))
 
-    async def edit_llm_config(
-        self,
-        model: str | None = None,
-        instructions: str | None = None,
-        provider_id: int | None = None,
-    ):
-        session = self.Session()
-        result = await to_thread(
-            session.execute, select(LLMConfig).where(LLMConfig.model == model)
-        )
-        llm_config = result.scalars().first()
-        if llm_config:
-            if model:
-                llm_config.model = model
-            if instructions:
-                llm_config.instructions = instructions
-            if provider_id:
-                llm_config.provider_id = provider_id
-            await session.commit()
-        else:
-            llm_config = LLMConfig(
-                model=model,
-                instructions=instructions,
-                provider_id=provider_id,
-            )
-            session.add(llm_config)
-            await to_thread(session.commit)
+    async def add(self, obj):
+        await self._run_in_session(lambda s, o: (s.add(o), s.commit()), obj)
 
-    async def add_provider(self, provider):
-        session = self.Session()
-        session.add(provider)
-        await to_thread(session.commit)
+    async def delete(self, obj):
+        await self._run_in_session(lambda s, o: (s.delete(o), s.commit()), obj)
 
-    async def get_provider(self, provider_id):
-        result = await to_thread(
-            self.Session().execute,
-            select(LLMProvider).where(LLMProvider.id == provider_id),
-        )
-        return result.scalars().first()
+    async def merge(self, obj):
+        await self._run_in_session(lambda s, o: (s.merge(o), s.commit()), obj)
 
-    async def update_provider(self, provider):
-        await to_thread(self.Session().merge, provider)
-        await to_thread(self.Session().commit)
+    async def commit(self):
+        await self._run_in_session(lambda s: s.commit())
 
-    async def get_providers(self):
-        result = await to_thread(self.Session().execute, select(LLMProvider))
-        return result.scalars().all()
-
-    async def get_llm_config(self):
-        result = await to_thread(self.Session().execute, select(LLMConfig))
-        return result.scalars().first()
-
-    async def add_user(self, user: User):
-        await to_thread(self.Session().add, user)
-        await to_thread(self.Session().commit)
-
-    async def update_user(self, user: User):
-        await to_thread(self.Session().merge, user)
-        await to_thread(self.Session().commit)
-
-    async def get_user(self, user_id: int) -> User | None:
-        result = await to_thread(
-            self.Session().execute, select(User).where(User.id == user_id)
-        )
-        return result.scalars().first()
-
-    async def add_chat_session(self, chat_session: ChatSession):
-        await to_thread(self.Session().add, chat_session)
-        await to_thread(self.Session().commit)
-
-    async def update_chat_session(self, chat_session: ChatSession):
-        if chat_session:
-            if len(chat_session.messages) > 30:
-                chat_session.messages.pop(0)
-        await to_thread(self.Session().merge, chat_session)
-        await to_thread(self.Session().commit)
-
-    async def get_chat_session(self, chat_id: int) -> ChatSession | None:
-        result = await to_thread(
-            self.Session().execute,
-            select(ChatSession).where(ChatSession.chat_id == chat_id),
-        )
-        return result.scalars().first()
+    async def execute(self, *args, **kwargs):
+        return await self._run_in_session(lambda s: s.execute(*args, **kwargs))
