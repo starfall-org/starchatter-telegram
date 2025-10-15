@@ -1,13 +1,17 @@
 import asyncio
 from datetime import datetime, timedelta
+
 from config import TURSO_AUTH_TOKEN, TURSO_DB_URL
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
+
+from app.database.models import Base  # import Base để tạo bảng
 
 
 class Database:
     _instance = None
     _timeout = timedelta(minutes=5)
+    _initialized_db = False  # thêm cờ kiểm soát init db
 
     def __new__(cls):
         if cls._instance is None:
@@ -28,11 +32,20 @@ class Database:
     def _create_engine(self):
         self._engine = create_engine(
             TURSO_DB_URL,
-            connect_args={
-                "auth_token": TURSO_AUTH_TOKEN} if TURSO_AUTH_TOKEN else {},
+            connect_args={"auth_token": TURSO_AUTH_TOKEN} if TURSO_AUTH_TOKEN else {},
         )
         self._sessionmaker = sessionmaker(self._engine, expire_on_commit=False)
         self._disposed = False
+
+    def init_db(self):
+        """Tạo bảng nếu chưa tồn tại, chỉ chạy một lần khi khởi động."""
+        if not self._initialized_db:
+            if self._disposed or self._engine is None:
+                self._create_engine()
+            # tạo bảng trong luồng riêng để tránh block event loop
+            if self._engine:
+                Base.metadata.create_all(self._engine)
+                self._initialized_db = True
 
     def _get_session(self) -> Session | None:
         if self._disposed or self._engine is None:
@@ -51,7 +64,11 @@ class Database:
             if self._session and (now - self._last_used > self._timeout):
                 await asyncio.to_thread(self._session.close)
                 self._session = None
-            if not self._disposed and self._engine and (now - self._last_used > self._timeout):
+            if (
+                not self._disposed
+                and self._engine
+                and (now - self._last_used > self._timeout)
+            ):
                 self._engine.dispose()
                 self._disposed = True
 
@@ -67,7 +84,6 @@ class Database:
         try:
             return await asyncio.to_thread(func, s, *args, **kwargs)
         finally:
-            # không đóng ngay, để auto_close làm nhiệm vụ sau 5 phút
             pass
 
     async def get(self, model, *args, **kwargs):
