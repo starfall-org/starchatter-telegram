@@ -2,10 +2,9 @@ import asyncio
 from datetime import datetime, timedelta
 
 from config import TURSO_AUTH_TOKEN, TURSO_DB_URL
+from database.models import Base
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
-
-from app.database.models import Base  # import Base để tạo bảng
 
 
 class Database:
