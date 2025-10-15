@@ -6,11 +6,11 @@ WORKDIR /home/user
 
 USER user
 
-COPY requirements.txt requirements.txt
+COPY --chown=user:user requirements.txt requirements.txt
 
 RUN pip install -r requirements.txt
 
-COPY . .
+COPY --chown=user:user . .
 
 EXPOSE 7860
 

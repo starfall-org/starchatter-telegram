@@ -8,7 +8,7 @@ from database.models import LLMConfig
 from openai import AsyncOpenAI
 from sqlalchemy import select
 
-kv = shelve.open("cache")
+kv = shelve.open("cache.db", writeback=True)
 
 
 class BaseFactory:
