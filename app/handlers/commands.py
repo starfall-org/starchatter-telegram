@@ -1,7 +1,8 @@
 from config import OWNER_ID
 from database.client import Database
+from database.models import GroupMember, TelegramGroup, TelegramUser
 from pyrogram import Client, enums, filters, types
-from database.models import TelegramUser, TelegramGroup
+from utils import is_chat_admin, is_chat_owner, is_owner
 
 db = Database()
 
@@ -42,7 +43,22 @@ async def group_menu(client: Client, message: types.Message):
         user = await db.get(TelegramUser, id=message.from_user.id)
         user = user.scalars().first()
     if user not in group.users:
-        await message.reply("You must be a group admin to use this menu.", quote=True)
+        group.users.append(user)
+        member_link = GroupMember(
+            user_id=user.id,
+            group_id=group.id,
+            is_admin=await is_chat_admin(message.from_user, message.chat),
+            is_owner=await is_chat_owner(message.from_user, message.chat),
+        )
+        group.user_links.append(member_link)
+        user.group_links.append(member_link)
+        await db.commit()
+    if not (
+        await is_chat_owner(message.from_user, message.chat)
+        or await is_chat_admin(message.from_user, message.chat)
+        or await is_owner(message.from_user)
+    ):
+        await message.reply("You must be an admin to access the menu.")
         return
 
     keyboard_markup = types.InlineKeyboardMarkup(
@@ -75,7 +91,6 @@ async def admin_menu(_: Client, message: types.Message):
         [
             [
                 types.InlineKeyboardButton(text="LLM Config", callback_data="config"),
-                types.InlineKeyboardButton(text="Edit", callback_data="edit_config"),
             ],
             [
                 types.InlineKeyboardButton(text="Providers", callback_data="providers"),
