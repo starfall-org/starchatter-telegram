@@ -10,6 +10,7 @@ db = Database()
 
 @Client.on_message(
     filters.text
+    & filters.incoming
     & (filters.private | filters.mentioned)
     # pyright: ignore[reportArgumentType]
     & ~filters.create(lambda _, __, m: m.text.startswith("/"))
@@ -48,7 +49,7 @@ async def chatbot_handler(client: Client, message: types.Message):
             )
 
 
-@Client.on_message(filters.group)  # type: ignore
+@Client.on_message(filters.group & filters.incoming)  # type: ignore
 async def detect_spam_handler(client: Client, message: types.Message):
     text = message.text or message.caption or ""
     if text:
