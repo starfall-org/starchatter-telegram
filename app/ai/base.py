@@ -6,7 +6,6 @@ from config import AI_MODEL, OPENAI_API_KEY, OPENAI_URL
 from database.client import Database
 from database.models import LLMConfig
 from openai import AsyncOpenAI
-from sqlalchemy import select
 
 kv = shelve.open("cache.db", writeback=True)
 
@@ -29,12 +28,13 @@ class BaseFactory:
         return old
 
     async def _refresh_llm_config(self):
-        cmd = select(LLMConfig)
-        kv["llm_config"] = await self.db.execute(cmd)
-        kv["llm_config_time"] = time.time()
+        llmc = await self.db.get(LLMConfig)
+        if conf := llmc.scalar_one_or_none():
+            kv["llm_config"] = conf
+            kv["llm_config_time"] = time.time()
 
     async def _get_chat_session_cached(self, chat_id):
-        session = kv[f"session_{chat_id}"]
+        session = kv.get(f"session_{chat_id}")
         if not session:
             session = kv[f"session_{chat_id}"] = []
         return session
@@ -63,8 +63,7 @@ class BaseFactory:
         chat_session.append({"role": "user", "content": message})
         messages = [
             {"role": "system", "content": f"You are StarChatter. {instructions}"},
-            *({"role": cm.role, "content": cm.content}
-              for cm in chat_session),
+            *({"role": cm.role, "content": cm.content} for cm in chat_session),
         ]
 
         response = await self.client.chat.completions.create(
