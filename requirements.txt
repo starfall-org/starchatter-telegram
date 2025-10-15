@@ -1,4 +1,5 @@
 openai==2.3.0
+ollama
 sqlalchemy-libsql
 TgCrypto==1.2.5
 pyrofork
