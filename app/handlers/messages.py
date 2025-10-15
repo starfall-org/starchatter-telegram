@@ -1,3 +1,4 @@
+from ai.anti_spam import detector
 from ai.base import BaseFactory
 from database.client import Database
 from database.models import TelegramGroup, TelegramUser
@@ -31,7 +32,7 @@ async def chatbot_handler(client: Client, message: types.Message):
                     id=message.from_user.id,
                     first_name=message.from_user.first_name,
                     last_name=message.from_user.last_name,
-                    username=message.from_user.username
+                    username=message.from_user.username,
                 )
             )
     if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
@@ -42,6 +43,62 @@ async def chatbot_handler(client: Client, message: types.Message):
                 TelegramGroup(
                     id=message.chat.id,
                     title=message.chat.title,
-                    username=message.chat.username
+                    username=message.chat.username,
                 )
             )
+
+
+@Client.on_message(filters.group)  # type: ignore
+async def detect_spam_handler(client: Client, message: types.Message):
+    text = message.text or message.caption or ""
+    if text:
+        result = await detector(text)
+        if result.get("is_spam"):
+            group = await db.get(TelegramGroup, id=message.chat.id)
+            group = group.scalars().first()
+            if group and group.anti_spam:
+                bot_member = await client.get_chat_member(
+                    message.chat.id,
+                    client.me.id,  # type: ignore
+                )
+                if (
+                    bot_member.status == enums.ChatMemberStatus.ADMINISTRATOR
+                    and bot_member.privileges.can_delete_messages
+                ):
+                    actions = []
+                    try:
+                        await message.delete()
+                        actions.append("deleted the message")
+                    except Exception as e:
+                        print(f"Error deleting message: {e}")
+                    try:
+                        user_member = await client.get_chat_member(
+                            message.chat.id, message.from_user.id
+                        )
+                        if user_member.status in [
+                            enums.ChatMemberStatus.ADMINISTRATOR,
+                            enums.ChatMemberStatus.OWNER,
+                        ]:
+                            actions.append(
+                                "could not take action against the user (they are an admin/owner)"
+                            )
+                        else:
+                            await message.chat.restrict_member(
+                                message.from_user.id,
+                                types.ChatPermissions(can_send_messages=False),
+                            )
+                            actions.append("restricted the user")
+                    except Exception as e:
+                        print(f"Error sending reply: {e}")
+
+                    if actions:
+                        action_text = " and ".join(actions)
+                        reason = result.get("reason", "No reason provided")
+                        reply_text = f"⚠️ __User **{message.from_user.first_name}** was detected as spam and I have {action_text}.__\n\n**Reason:** ```\n{reason}\n```"
+                        try:
+                            await message.reply(reply_text)
+                        except Exception as e:
+                            print(f"Error sending reply: {e}")
+
+                else:
+                    print("Bot does not have permission to delete messages.")
