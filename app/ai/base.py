@@ -63,7 +63,7 @@ class BaseFactory:
         chat_session.append({"role": "user", "content": message})
         messages = [
             {"role": "system", "content": f"You are StarChatter. {instructions}"},
-            *({"role": cm.role, "content": cm.content} for cm in chat_session),
+            *({"role": cm["role"], "content": cm["content"]} for cm in chat_session),
         ]
 
         response = await self.client.chat.completions.create(
