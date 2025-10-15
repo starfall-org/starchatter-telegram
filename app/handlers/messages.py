@@ -10,7 +10,7 @@ db = Database()
 
 @Client.on_message(
     filters.text
-    & (filters.private | (filters.mentioned | filters.reply))
+    & (filters.private | filters.mentioned)
     # pyright: ignore[reportArgumentType]
     & ~filters.create(lambda _, __, m: m.text.startswith("/"))
 )
