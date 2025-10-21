@@ -1,4 +1,5 @@
 from ai.poem import get_poem
+from ai.nsfw import gen_img
 from config import OWNER_ID
 from database.client import Database
 from database.models import GroupMember, TelegramGroup, TelegramUser
@@ -7,10 +8,20 @@ from utils import is_chat_admin, is_chat_owner, is_owner
 
 db = Database()
 
+basic_buttons = [
+    types.InlineKeyboardButton(text="Channel", url="https://t.me/starfall_org"),
+    types.InlineKeyboardButton(text="Group", url="https://t.me/starfall_community"),
+    types.InlineKeyboardButton(text="Discord", url="https://discord.gg/9WF54BSc4s"),
+]
+
 
 @Client.on_message(filters.command(["start", "help"]))  # type: ignore
 async def start(client: Client, message: types.Message):
-    await message.reply("Welcome to StarChatter.")
+    markup = types.InlineKeyboardMarkup([[button for button in basic_buttons]])
+    await message.reply(
+        "Welcome to StarChatter.",
+        reply_markup=markup,
+    )
 
 
 @Client.on_message(filters.command("group_menu") & filters.group)  # type: ignore
@@ -77,6 +88,7 @@ async def group_menu(client: Client, message: types.Message):
                 ),
             ],
             [types.InlineKeyboardButton(text="Goodbye", callback_data="_goodbye")],
+            [button for button in basic_buttons],
         ]
     )
 
@@ -129,7 +141,24 @@ async def poem_handler(client: Client, message: types.Message):
     locale = None
     if message.command[0] == "/tho":
         locale = "vi"
+    author = message.from_user.full_name
     hint = message.text.split(" ", 1)[1]
     await message.reply_chat_action(enums.ChatAction.TYPING)
     poem = await get_poem(hint, locale)
-    await message.reply(f"```\n{poem['result']}\n```")
+    await message.reply(
+        f"```\n{poem['result']}\n```——————__**{author}**__———————",
+        reply_markup=types.InlineKeyboardMarkup([[button for button in basic_buttons]]),
+    )
+    await message.delete()
+
+
+@Client.on_message(filters.command("image"))  # type: ignore
+async def nsfw_handler(client: Client, message: types.Message):
+    await message.reply_chat_action(enums.ChatAction.TYPING)
+    prompt = message.text.split(" ", 1)[1]
+    await message.reply_photo(
+        await gen_img(prompt),
+        caption=f"```\n{prompt}\n```",
+        reply_markup=types.InlineKeyboardMarkup([[button for button in basic_buttons]]),
+    )
+    await message.delete()

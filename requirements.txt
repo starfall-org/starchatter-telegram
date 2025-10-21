@@ -6,3 +6,6 @@ pyrofork
 flask
 uvloop
 aiohttp
+langdetect
+gradio_client
+pillow
