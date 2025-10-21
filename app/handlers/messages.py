@@ -49,7 +49,7 @@ async def chatbot_handler(client: Client, message: types.Message):
             )
 
 
-@Client.on_message(filters.group & filters.incoming, group=1)  # type: ignore
+@Client.on_message(filters.group & filters.incoming, group=2)  # type: ignore
 async def detect_spam_handler(client: Client, message: types.Message):
     text = message.text or message.caption or ""
     if text:
