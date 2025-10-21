@@ -1,3 +1,4 @@
+from ai.poem import get_poem
 from config import OWNER_ID
 from database.client import Database
 from database.models import GroupMember, TelegramGroup, TelegramUser
@@ -121,3 +122,14 @@ async def admin_menu(_: Client, message: types.Message):
     )
 
     await message.reply("Admin Menu", reply_markup=keyboard_markup)
+
+
+@Client.on_message(filters.command(["poem", "tho"]))  # type: ignore
+async def poem_handler(client: Client, message: types.Message):
+    locale = None
+    if message.command[0] == "/tho":
+        locale = "vi"
+    hint = message.text.split(" ", 1)[1]
+    await message.reply_chat_action(enums.ChatAction.TYPING)
+    poem = await get_poem(hint, locale)
+    await message.reply(f"```\n{poem['result']}\n```")
