@@ -19,7 +19,7 @@ basic_buttons = [
 async def start(client: Client, message: types.Message):
     markup = types.InlineKeyboardMarkup([[button for button in basic_buttons]])
     await message.reply(
-        "Welcome to StarChatter.",
+        "Welcome to StarChatter.\n\nAvailable commands:\n\n/image [prompt] - Generate an image (NSFW non-blocked).\n/poem [prompt] - Generate a poem.",
         reply_markup=markup,
     )
 

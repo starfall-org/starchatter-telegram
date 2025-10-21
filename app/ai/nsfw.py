@@ -9,7 +9,7 @@ async def gen_img(
     client = Client("aiqtech/NSFW-Real")
     result = client.predict(
         prompt="Hello!!",
-        negative_prompt="nsfw, (low quality, worst quality:1.2), very displeasing, 3d, watermark, signature, ugly, poorly drawn",
+        negative_prompt="",
         seed=0,
         randomize_seed=True,
         width=1024,
