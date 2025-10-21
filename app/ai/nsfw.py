@@ -8,8 +8,8 @@ async def gen_img(
 ):
     client = Client("aiqtech/NSFW-Real")
     result = client.predict(
-        prompt="Hello!!",
-        negative_prompt="",
+        prompt=prompt,
+        negative_prompt=negative_prompt,
         seed=0,
         randomize_seed=True,
         width=1024,
