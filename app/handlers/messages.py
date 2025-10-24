@@ -49,7 +49,7 @@ async def chatbot_handler(client: Client, message: types.Message):
             )
 
 
-@Client.on_message(filters.group & filters.incoming, group=2)  # type: ignore
+@Client.on_message(filters.group & filters.incoming, group=1)  # type: ignore
 async def detect_spam_handler(client: Client, message: types.Message):
     text = message.text or message.caption or ""
     if text:
@@ -57,7 +57,7 @@ async def detect_spam_handler(client: Client, message: types.Message):
         if result.get("is_spam"):
             group = await db.get(TelegramGroup, id=message.chat.id)
             group = group.scalars().first()
-            if group and group.anti_spam:
+            if group and group.disable_anti_spam:
                 bot_member = await client.get_chat_member(
                     message.chat.id,
                     client.me.id,  # type: ignore
