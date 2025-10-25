@@ -14,7 +14,7 @@ async def gen_img(
         randomize_seed=True,
         width=1024,
         height=1024,
-        guidance_scale=7,
+        guidance_scale=0,
         num_inference_steps=28,
         api_name="/infer",
     )
