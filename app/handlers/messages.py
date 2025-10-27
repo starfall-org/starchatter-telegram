@@ -57,7 +57,7 @@ async def detect_spam_handler(client: Client, message: types.Message):
         if result.get("is_spam"):
             group = await db.get(TelegramGroup, id=message.chat.id)
             group = group.scalars().first()
-            if group and group.disable_anti_spam:
+            if group and (not group.disable_anti_spam):
                 bot_member = await client.get_chat_member(
                     message.chat.id,
                     client.me.id,  # type: ignore
