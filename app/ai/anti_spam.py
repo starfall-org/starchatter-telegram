@@ -1,9 +1,12 @@
 import json
-
+import base64
 from ollama import AsyncClient
+from config import OLLAMA_URL, DETECTOR_MODEL
 
 
-async def detector(content: str):
+async def detector(content: str, images: bytes | None = None) -> dict:
+    if images:
+        image = base64.b64encode(images).decode("utf-8")
     messages = [
         {
             "role": "system",
@@ -18,11 +21,13 @@ Here are the rules to identify spam:
 6. Messages that are irrelevant to the context of the conversation.
 7. Messages that contain offensive or inappropriate content.""",
         },
-        {"role": "user", "content": content},
+        {"role": "user", "content": content} if not images else {
+            "role": "user", "content": content, "images": [image]
+        },
     ]
     response = await AsyncClient(
-        host="http://15.204.230.123:11434/",
-    ).chat(model="gemma3:latest", messages=messages, format="json")
+        host=OLLAMA_URL,
+    ).chat(model=DETECTOR_MODEL, messages=messages, format="json")
 
     result = response.message.content
     if result:

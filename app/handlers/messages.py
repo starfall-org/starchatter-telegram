@@ -81,12 +81,16 @@ async def detect_spam_handler(client: Client, message: types.Message):
                             enums.ChatMemberStatus.OWNER,
                         ]:
                             actions.append(
-                                "could not take action against the user (they are an admin/owner)"
+                                "no action against the user (they are an admin/owner)"
                             )
                         else:
+                            if user_member.status == enums.ChatMemberStatus.RESTRICTED:
+                                actions.append("user is already restricted")
                             await message.chat.restrict_member(
-                                message.from_user.id,
-                                types.ChatPermissions(can_send_messages=False),
+                                user_id=message.from_user.id,
+                                permissions=types.ChatPermissions(
+                                    all_perms=False,
+                                ),
                             )
                             actions.append("restricted the user")
                     except Exception as e:
