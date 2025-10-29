@@ -53,7 +53,13 @@ async def chatbot_handler(client: Client, message: types.Message):
 async def detect_spam_handler(client: Client, message: types.Message):
     text = message.text or message.caption or ""
     if text:
-        result = await detector(text)
+        if message.photo:
+            photo = await message.download(in_memory=True)
+            if not isinstance(photo, str):
+                photo_bytes = photo.getvalue()
+                result = await detector(text, images=photo_bytes)
+        else:
+            result = await detector(text)
         if result.get("is_spam"):
             group = await db.get(TelegramGroup, id=message.chat.id)
             group = group.scalars().first()
