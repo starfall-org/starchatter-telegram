@@ -1,3 +1,5 @@
+from random import choice
+
 from ai.anti_spam import detector
 from ai.base import BaseFactory
 from database.client import Database
@@ -90,15 +92,24 @@ async def detect_spam_handler(client: Client, message: types.Message):
                                 "no action against the user (they are an admin/owner)"
                             )
                         else:
+                            action_choices = choice(
+                                [0, 1]
+                            )  # Randomly choose between ban and restrict
                             if user_member.status == enums.ChatMemberStatus.RESTRICTED:
                                 actions.append("user is already restricted")
-                            await message.chat.restrict_member(
-                                user_id=message.from_user.id,
-                                permissions=types.ChatPermissions(
-                                    all_perms=False,
-                                ),
-                            )
-                            actions.append("restricted the user")
+                            if action_choices == 0:
+                                await message.chat.ban_member(
+                                    user_id=message.from_user.id,
+                                )
+                                actions.append("banned the user")
+                            else:
+                                await message.chat.restrict_member(
+                                    user_id=message.from_user.id,
+                                    permissions=types.ChatPermissions(
+                                        all_perms=False,
+                                    ),
+                                )
+                                actions.append("restricted the user")
                     except Exception as e:
                         print(f"Error sending reply: {e}")
 
