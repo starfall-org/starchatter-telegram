@@ -1,8 +1,9 @@
+from datetime import datetime, timedelta
+
 from ai.base import BaseFactory
 from database.client import Database
-from database.models import TelegramGroup, TelegramUser, MutedCase
+from database.models import MutedCase, TelegramGroup, TelegramUser
 from pyrogram import Client, enums, filters, types
-from datetime import datetime, timedelta
 from sqlalchemy import select
 
 base = BaseFactory()
@@ -11,9 +12,7 @@ db = Database()
 
 @Client.on_message(filters.incoming)  # type: ignore
 async def chatbot_handler(client: Client, message: types.Message):
-    await message.reply_chat_action(enums.ChatAction.TYPING)
     text = message.text or message.caption or ""
-
     filtered = (
         client.me.username in text  # type: ignore
         or "StarChatter" in text
@@ -24,6 +23,9 @@ async def chatbot_handler(client: Client, message: types.Message):
         )
         or message.chat.type == enums.ChatType.PRIVATE
     )
+    
+    if filtered:
+        await message.reply_chat_action(enums.ChatAction.TYPING)
 
     async def mute_user(reason: str, duration: int = 0):
         f"""
