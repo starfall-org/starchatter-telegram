@@ -17,13 +17,17 @@ async def chatbot_handler(client: Client, message: types.Message):
         client.me.username in text  # type: ignore
         or "StarChatter" in text
         or (
-            message.reply_to_message
-            and message.reply_to_message.from_user
-            and message.reply_to_message.from_user.id == client.me.id  # type: ignore
+            (
+                message.reply_to_message.from_user.id == client.me.id  # type: ignore
+                if message.reply_to_message.from_user
+                else False
+            )
+            if message.reply_to_message
+            else False
         )
         or message.chat.type == enums.ChatType.PRIVATE
-    )
-    
+    ) and not text.startswith("/")
+
     if filtered:
         await message.reply_chat_action(enums.ChatAction.TYPING)
 
