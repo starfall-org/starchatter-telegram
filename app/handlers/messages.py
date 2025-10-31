@@ -11,7 +11,7 @@ db = Database()
 
 
 @Client.on_message(
-    filters.incoming & filters.create(lambda _, __, m: m.text.startswith("/"))  # type: ignore
+    filters.incoming & ~filters.create(lambda _, __, m: m.text.startswith("/"))  # type: ignore
 )
 async def chatbot_handler(client: Client, message: types.Message):
     text = message.text or message.caption or ""
