@@ -1,32 +1,174 @@
-from random import choice
-
-from ai.anti_spam import detector
 from ai.base import BaseFactory
 from database.client import Database
-from database.models import TelegramGroup, TelegramUser
+from database.models import TelegramGroup, TelegramUser, MutedCase
 from pyrogram import Client, enums, filters, types
+from datetime import datetime, timedelta
+from sqlalchemy import select
 
 base = BaseFactory()
 db = Database()
 
 
-@Client.on_message(
-    filters.text
-    & filters.incoming
-    & (filters.private | filters.mentioned)
-    # pyright: ignore[reportArgumentType]
-    & ~filters.create(lambda _, __, m: m.text.startswith("/"))
-)
+@Client.on_message(filters.incoming)  # type: ignore
 async def chatbot_handler(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)
+    text = message.text or message.caption or ""
 
-    content = await base.chat(message.text, message.chat.id)
-
-    await message.reply(
-        content or "Something went wrong!", reply_to_message_id=message.id
+    filtered = (
+        client.me.username in text  # type: ignore
+        or "StarChatter" in text
+        or (
+            message.reply_to_message.from_user
+            and message.reply_to_message.from_user.id == client.me.id  # type: ignore
+        )
+        or message.chat.type == enums.ChatType.PRIVATE
     )
 
-    if not message.sender_chat:
+    async def mute_user(reason: str, duration: int = 0):
+        f"""
+        Mute the user for a specified duration (in seconds).
+        If duration less than 30, mute permanently.
+        After muting, send a notification message to the user about the mute reason in the language have language code '{message.from_user.language_code}'. And tell them contact admin to unmute or contact you to appeal, you will recheck user's case.
+
+        Args:
+            reason (str): Reason for muting the user in the language have language code '{message.from_user.language_code}'.
+            duration (int): Duration in seconds to mute the user. Default is 0 (permanent mute).
+
+        Returns:
+            str: Success message or error message if muting fails.
+
+        """
+        user_member = await client.get_chat_member(
+            message.chat.id, message.from_user.id
+        )
+        if user_member.status in [
+            enums.ChatMemberStatus.ADMINISTRATOR,
+            enums.ChatMemberStatus.OWNER,
+        ]:
+            return "Cannot mute an admin or owner."
+        try:
+            await message.chat.restrict_member(
+                user_id=message.from_user.id,
+                permissions=types.ChatPermissions(
+                    all_perms=False,
+                ),
+                until_date=(datetime.now() + timedelta(seconds=duration)),
+            )
+            punished_case = MutedCase(
+                user_id=message.from_user.id,
+                group_id=message.chat.id,
+                group_title=message.chat.title,
+                group_username=message.chat.username,
+                reason=reason,
+                content=text,
+            )
+            await db.add(punished_case)
+            await db.commit()
+            return "User has been muted successfully."
+        except Exception as e:
+            print(f"Error muting user: {e}")
+            return str(e)
+
+    async def unmute_user(user_id: int, chat_id: int):
+        """
+        Unmute the user.
+
+        Returns:
+            str: Success message or error message if unmuting fails.
+        """
+        try:
+            await message.chat.restrict_member(
+                user_id=message.from_user.id,
+                permissions=types.ChatPermissions(
+                    all_perms=True,
+                ),
+            )
+            return "User has been unmuted successfully."
+        except Exception as e:
+            print(f"Error unmuting user: {e}")
+            return str(e)
+
+    async def delete_message():
+        """
+        Delete the offending message.
+
+        Returns:
+            str: Success message or error message if deletion fails.
+        """
+        try:
+            await message.delete()
+            return "Message has been deleted successfully."
+        except Exception as e:
+            print(f"Error deleting message: {e}")
+            return str(e)
+
+    async def get_user_muted_case(
+        group_title: str | None = None,
+        group_username: str | None = None,
+        group_id: int | None = None,
+    ) -> str:
+        """
+        Check if the user is currently muted in the chat. If muted, return json object of the muted case.
+
+        Args:
+            group_title (str | None, optional): Group title. Defaults to None.
+            group_username (str | None, optional): Group username. Defaults to None.
+            group_id (int | None, optional): Group ID. Defaults to None.
+
+        Returns:
+            str: Python object of the muted case or a message indicating no mute found.
+
+        """
+        if group_id:
+            query = select(MutedCase).where(
+                MutedCase.group_id == group_id,
+                MutedCase.user_id == message.from_user.id,
+            )
+            result = await db.execute(query)
+        if group_username and not group_id:
+            query = select(MutedCase).where(
+                MutedCase.group_username == group_username,
+                MutedCase.user_id == message.from_user.id,
+            )
+            result = await db.execute(query)
+        if group_title and not group_username and not group_id:
+            query = select(MutedCase)
+            results = await db.execute(query)
+            for item in results:
+                if (
+                    group_title.lower() in item.group_title.lower()
+                    and item.user_id == message.from_user.id
+                ):
+                    result = await db.execute(
+                        select(MutedCase).where(MutedCase.id == item.id)
+                    )
+                    break
+        else:
+            return "Please provide at least one identifier: group_title, group_username, or group_id."
+        muted_case = result.scalars().first()
+        if muted_case and isinstance(muted_case, MutedCase):
+            return str(muted_case)
+        return "This case not found in database."
+
+    tools = [
+        unmute_user,
+        get_user_muted_case,
+        delete_message,
+    ]
+    if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
+        tools.append(mute_user)
+
+    photo_bytes = None
+    if message.photo:
+        photo = await message.download(in_memory=True)
+        photo_bytes = photo.getvalue()  # type: ignore
+
+    async for content, tool_called in base.chat(
+        text, message.chat.id, filtered, tools, photo=photo_bytes
+    ):
+        if tool_called and filtered:
+            await message.reply(content, reply_to_message_id=message.id)
+    if filtered and not message.sender_chat:
         user = await db.get(TelegramUser, id=message.from_user.id)
         user = user.scalars().first()
         if not user:
@@ -49,78 +191,3 @@ async def chatbot_handler(client: Client, message: types.Message):
                     username=message.chat.username,
                 )
             )
-
-
-@Client.on_message(filters.group & filters.incoming, group=1)  # type: ignore
-async def detect_spam_handler(client: Client, message: types.Message):
-    text = message.text or message.caption or ""
-    if text:
-        if message.photo:
-            photo = await message.download(in_memory=True)
-            if not isinstance(photo, str):
-                photo_bytes = photo.getvalue()
-                result = await detector(text, images=photo_bytes)
-        else:
-            result = await detector(text)
-        if result.get("is_spam"):
-            group = await db.get(TelegramGroup, id=message.chat.id)
-            group = group.scalars().first()
-            if group and (not group.disable_anti_spam):
-                bot_member = await client.get_chat_member(
-                    message.chat.id,
-                    client.me.id,  # type: ignore
-                )
-                if (
-                    bot_member.status == enums.ChatMemberStatus.ADMINISTRATOR
-                    and bot_member.privileges.can_delete_messages
-                ):
-                    actions = []
-                    try:
-                        await message.delete()
-                        actions.append("deleted the message")
-                    except Exception as e:
-                        print(f"Error deleting message: {e}")
-                    try:
-                        user_member = await client.get_chat_member(
-                            message.chat.id, message.from_user.id
-                        )
-                        if user_member.status in [
-                            enums.ChatMemberStatus.ADMINISTRATOR,
-                            enums.ChatMemberStatus.OWNER,
-                        ]:
-                            actions.append(
-                                "no action against the user (they are an admin/owner)"
-                            )
-                        else:
-                            action_choices = choice(
-                                [0, 1]
-                            )  # Randomly choose between ban and restrict
-                            if user_member.status == enums.ChatMemberStatus.RESTRICTED:
-                                actions.append("user is already restricted")
-                            if action_choices == 0:
-                                await message.chat.ban_member(
-                                    user_id=message.from_user.id,
-                                )
-                                actions.append("banned the user")
-                            else:
-                                await message.chat.restrict_member(
-                                    user_id=message.from_user.id,
-                                    permissions=types.ChatPermissions(
-                                        all_perms=False,
-                                    ),
-                                )
-                                actions.append("restricted the user")
-                    except Exception as e:
-                        print(f"Error sending reply: {e}")
-
-                    if actions:
-                        action_text = " and ".join(actions)
-                        reason = result.get("reason", "No reason provided")
-                        reply_text = f"⚠️ __User **{message.from_user.first_name}** was detected as spam and I have {action_text}.__\n\n**Reason:** ```\n{reason}\n```"
-                        try:
-                            await message.reply(reply_text)
-                        except Exception as e:
-                            print(f"Error sending reply: {e}")
-
-                else:
-                    print("Bot does not have permission to delete messages.")
