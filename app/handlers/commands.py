@@ -24,7 +24,7 @@ async def start(client: Client, message: types.Message):
     )
 
 
-@Client.on_message(filters.command("group_menu") & filters.group)  # type: ignore
+@Client.on_message(filters.command("menu") & filters.group)  # type: ignore
 async def group_menu(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)
     group = await db.get(TelegramGroup, id=message.chat.id)
@@ -93,47 +93,6 @@ async def group_menu(client: Client, message: types.Message):
     )
 
     await message.reply("Group Admin Menu:", reply_markup=keyboard_markup)
-
-
-@Client.on_message(
-    filters.command("menu") & filters.user(OWNER_ID)  # type: ignore
-)
-async def admin_menu(_: Client, message: types.Message):
-    await message.reply_chat_action(enums.ChatAction.TYPING)
-    keyboard_markup = types.InlineKeyboardMarkup(
-        [
-            [
-                types.InlineKeyboardButton(text="LLM Config", callback_data="config"),
-            ],
-            [
-                types.InlineKeyboardButton(text="Providers", callback_data="providers"),
-            ],
-            [
-                types.InlineKeyboardButton(
-                    text="Add Provider", callback_data="add_provider"
-                ),
-                types.InlineKeyboardButton(
-                    text="Delete Provider", callback_data="delete_provider"
-                ),
-            ],
-            [
-                types.InlineKeyboardButton(text="Channels", callback_data="channels"),
-            ],
-            [
-                types.InlineKeyboardButton(
-                    text="Add Channel", callback_data="add_channel"
-                ),
-                types.InlineKeyboardButton(
-                    text="Delete Channel", callback_data="delete_channel"
-                ),
-            ],
-            [
-                types.InlineKeyboardButton(text="Groups", callback_data="groups"),
-            ],
-        ]
-    )
-
-    await message.reply("Admin Menu", reply_markup=keyboard_markup)
 
 
 @Client.on_message(filters.command(["poem", "tho"]))  # type: ignore
