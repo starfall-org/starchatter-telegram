@@ -18,7 +18,8 @@ async def chatbot_handler(client: Client, message: types.Message):
         client.me.username in text  # type: ignore
         or "StarChatter" in text
         or (
-            message.reply_to_message.from_user
+            message.reply_to_message
+            and message.reply_to_message.from_user
             and message.reply_to_message.from_user.id == client.me.id  # type: ignore
         )
         or message.chat.type == enums.ChatType.PRIVATE
