@@ -10,7 +10,9 @@ base = BaseFactory()
 db = Database()
 
 
-@Client.on_message(filters.incoming)  # type: ignore
+@Client.on_message(
+    filters.incoming & filters.create(lambda _, __, m: m.text.startswith("/"))  # type: ignore
+)
 async def chatbot_handler(client: Client, message: types.Message):
     text = message.text or message.caption or ""
     filtered = (
@@ -26,7 +28,7 @@ async def chatbot_handler(client: Client, message: types.Message):
             else False
         )
         or message.chat.type == enums.ChatType.PRIVATE
-    ) and not text.startswith("/")
+    )
 
     if filtered:
         await message.reply_chat_action(enums.ChatAction.TYPING)
