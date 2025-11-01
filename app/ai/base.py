@@ -41,7 +41,8 @@ class BaseFactory:
             self.instructions = (
                 self.instructions
                 + f"""\nYou will analyze the message to check if it is spam, advertising, illegal and any other unsafe content that you realize. If yes:
-                - Send a report message include: the reason, their name "**{user}**" and tell them contact admin to unmute or contact you to appeal.
+                - Send a report message include: the reason, their name "**{user}**" and tell them contact admin to unmute or contact you to appeal. The report message should have 2 versions: 1. English, 2. Same as the language in the message.
+                - Delete the message.
                 """
             )
         if photo:
