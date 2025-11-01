@@ -175,7 +175,7 @@ async def chatbot_handler(client: Client, message: types.Message):
     async for content, tool_called in base.chat(
         text, message.chat.id, filtered, tools, photo=photo_bytes
     ):
-        if tool_called and filtered:
+        if tool_called or filtered:
             await message.reply(content, reply_to_message_id=message.id)
     if filtered and not message.sender_chat:
         user = await db.get(TelegramUser, id=message.from_user.id)
