@@ -56,14 +56,29 @@ class BaseFactory:
             )
         else:
             chat_session.append({"role": "user", "content": message})
+        if not filtered:
+            messages = [
+                {
+                    "role": "system",
+                    "content": self.instructions,
+                },
+                {
+                    "role": "user",
+                    "content": message,
+                },
+            ]
 
-        messages = [
-            {
-                "role": "system",
-                "content": self.instructions,
-            },
-            *({"role": cm["role"], "content": cm["content"]} for cm in chat_session),
-        ]
+        else:
+            messages = [
+                {
+                    "role": "system",
+                    "content": self.instructions,
+                },
+                *(
+                    {"role": cm["role"], "content": cm["content"]}
+                    for cm in chat_session
+                ),
+            ]
 
         response = await self.client.chat(
             model=AI_MODEL, messages=messages, tools=tools

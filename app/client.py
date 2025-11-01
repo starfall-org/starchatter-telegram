@@ -7,5 +7,4 @@ client = Client(
     API_HASH,
     bot_token=BOT_TOKEN,
     plugins={"root": "handlers"},
-    in_memory=True,
 )
