@@ -15,7 +15,7 @@ class BaseFactory:
         self.client = AsyncClient(
             host=OLLAMA_URL,
         )
-        self.instructions = "You are StarChatter, you can chat with users, manage group, handle tasks and provide useful information. You will mute users who sending spam, advertising, illegal and any other unsafe content that you realize."
+        self.instructions = "You are StarChatter, you can chat with users, manage group, handle tasks and provide useful information. If user ask you to unmute them from a group, you will call get_user_muted_case to check and you will decide unmute them or not."
 
     async def _get_chat_session_cached(self, chat_id):
         session = kv.get(f"session_{chat_id}")
@@ -28,13 +28,22 @@ class BaseFactory:
 
     async def chat(
         self,
+        user: str,
         message: str,
         chat_id: int,
+        is_group: bool,
         filtered: bool,
         tools: list | None = None,
         photo: bytes | None = None,
     ):
         chat_session = await self._get_chat_session_cached(chat_id)
+        if is_group:
+            self.instructions = (
+                self.instructions
+                + f"""\nYou will analyze the message to check if it is spam, advertising, illegal and any other unsafe content that you realize. If yes:
+                - Send a report message include: the reason, their name "**{user}**" and tell them contact admin to unmute or contact you to appeal.
+                """
+            )
         if photo:
             encoded_photo = base64.b64encode(photo).decode("utf-8")
             chat_session.append(
@@ -48,7 +57,10 @@ class BaseFactory:
             chat_session.append({"role": "user", "content": message})
 
         messages = [
-            {"role": "system", "content": self.instructions},
+            {
+                "role": "system",
+                "content": self.instructions,
+            },
             *({"role": cm["role"], "content": cm["content"]} for cm in chat_session),
         ]
 

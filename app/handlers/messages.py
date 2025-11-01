@@ -15,6 +15,11 @@ db = Database()
 )
 async def chatbot_handler(client: Client, message: types.Message):
     text = message.text or message.caption or ""
+    full_name = (
+        message.sender_chat.title
+        if message.sender_chat
+        else message.from_user.full_name
+    )
     filtered = (
         client.me.username in text  # type: ignore
         or "StarChatter" in text
@@ -29,6 +34,10 @@ async def chatbot_handler(client: Client, message: types.Message):
         )
         or message.chat.type == enums.ChatType.PRIVATE
     )
+    is_group = message.chat.type in [
+        enums.ChatType.GROUP,
+        enums.ChatType.SUPERGROUP,
+    ]
 
     if filtered:
         await message.reply_chat_action(enums.ChatAction.TYPING)
@@ -37,7 +46,6 @@ async def chatbot_handler(client: Client, message: types.Message):
         f"""
         Mute the user for a specified duration (in seconds).
         If duration less than 30, mute permanently.
-        After muting, send a notification message to the user about the mute reason in the language have language code '{message.from_user.language_code}'. And tell them contact admin to unmute or contact you to appeal, you will recheck user's case.
 
         Args:
             reason (str): Reason for muting the user in the language have language code '{message.from_user.language_code}'.
@@ -173,7 +181,13 @@ async def chatbot_handler(client: Client, message: types.Message):
         photo_bytes = photo.getvalue()  # type: ignore
 
     async for content, tool_called in base.chat(
-        text, message.chat.id, filtered, tools, photo=photo_bytes
+        user=full_name,
+        message=text,
+        chat_id=message.chat.id,
+        is_group=is_group,
+        filtered=filtered,
+        tools=tools,
+        photo=photo_bytes,
     ):
         if tool_called or filtered:
             await message.reply(content, reply_to_message_id=message.id)
