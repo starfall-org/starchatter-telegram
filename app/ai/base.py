@@ -61,7 +61,7 @@ class BaseFactory:
             if response.message.tool_calls:
                 for call in response.message.tool_calls:
                     func = next(
-                        (tool for tool in tools if tool.name == call.function.name),
+                        (tool for tool in tools if tool.__name__ == call.function.name),
                         None,
                     )
                     args = call.function.arguments
