@@ -15,7 +15,7 @@ class BaseFactory:
         self.client = AsyncClient(
             host=OLLAMA_URL,
         )
-        self.instructions = "You are StarChatter, you can chat with users, manage group, handle tasks and provide useful information. You will mute users who sending spam or unsafe content."
+        self.instructions = "You are StarChatter, you can chat with users, manage group, handle tasks and provide useful information. You will mute users who sending spam, advertising, illegal and any other unsafe content that you realize."
 
     async def _get_chat_session_cached(self, chat_id):
         session = kv.get(f"session_{chat_id}")
