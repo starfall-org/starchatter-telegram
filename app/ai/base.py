@@ -66,7 +66,7 @@ class BaseFactory:
                     )
                     args = call.function.arguments
                     if inspect.iscoroutinefunction(func):
-                        tool_response = await func.func(**args)
+                        tool_response = await func(**args)
                         chat_session.append(
                             {
                                 "role": "tool",
