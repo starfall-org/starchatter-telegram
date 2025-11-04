@@ -68,7 +68,7 @@ class AIAgent:
     def __init__(self):
         self.model_id = get_model()
         self.litellm_model = LitellmModel(
-            model=self.model_id,
+            model="openai/" + self.model_id,
             base_url=OPENAI_BASE_URL,
             api_key=OPENAI_API_KEY,
         )
