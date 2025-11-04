@@ -18,18 +18,6 @@ def _get_user_muted_case(
     group_username: str | None = None,
     group_id: int | None = None,
 ) -> str | None:
-    """
-    Check if the user is currently muted in the chat. If muted, return json object of the muted case.
-
-    Args:
-        group_title (str | None, optional): Group title. Defaults to None.
-        group_username (str | None, optional): Group username. Defaults to None.
-        group_id (int | None, optional): Group ID. Defaults to None.
-
-    Returns:
-        str: Python object of the muted case or a message indicating no mute found.
-
-    """
     session = db._get_session()
     if session:
         if group_id:
@@ -100,6 +88,18 @@ class AIAgent:
             group_username: str | None = None,
             group_id: int | None = None,
         ):
+            """
+            Check if the user is currently muted in the chat. If muted, return json object of the muted case.
+
+            Args:
+                group_title (str | None, optional): Group title. Defaults to None.
+                group_username (str | None, optional): Group username. Defaults to None.
+                group_id (int | None, optional): Group ID. Defaults to None.
+
+            Returns:
+                str: Python object of the muted case or a message indicating no mute found.
+
+            """
             return _get_user_muted_case(message, group_title, group_username, group_id)
 
         @function_tool
