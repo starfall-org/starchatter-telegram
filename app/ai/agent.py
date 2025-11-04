@@ -78,7 +78,7 @@ class AIAgent:
         functions.append(set_model)
         return Agent(
             "StarChatter",
-            instructions=f"You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. Remember to use tools if needed.",
+            instructions=f"You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. Remember to use tools if required.",
             tools=functions,
             model=self.litellm_model,
             mcp_servers=mcp_server,
