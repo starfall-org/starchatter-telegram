@@ -80,7 +80,6 @@ class AIAgent:
         def clear_history():
             loop = asyncio.get_event_loop()
             result = asyncio.run_coroutine_threadsafe(session.clear_session(), loop)
-            print(result.result())
             return "History cleared."
 
         @function_tool
@@ -115,7 +114,7 @@ class AIAgent:
                 ),
                 loop,
             )
-            print(result.result())
+            
             return "Action completed."
 
         async with mcp.MCPServerSse(
