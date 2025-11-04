@@ -1,7 +1,7 @@
 import os
 
 from agents import function_tool, set_default_openai_api
-from config import OPENAI_API_KEY, OPENAI_BASE_URL
+from config import AI_API_KEY, AI_BASE_URL
 from openai import OpenAI
 
 
@@ -10,7 +10,7 @@ def setup_agent():
 
 
 def models():
-    client = OpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
+    client = OpenAI(base_url=AI_BASE_URL, api_key=AI_API_KEY)
     return client.models.list()
 
 

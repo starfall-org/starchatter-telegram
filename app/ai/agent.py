@@ -7,7 +7,7 @@ from database.client import Database
 from database.models import MutedCase
 from pyrogram import Client, types
 from sqlalchemy import select
-from config import OPENAI_API_KEY, OPENAI_BASE_URL
+from config import AI_API_KEY, AI_BASE_URL
 
 db = Database()
 
@@ -69,8 +69,8 @@ class AIAgent:
         self.model_id = get_model()
         self.litellm_model = LitellmModel(
             model="openai/" + self.model_id,
-            base_url=OPENAI_BASE_URL,
-            api_key=OPENAI_API_KEY,
+            base_url=AI_BASE_URL,
+            api_key=AI_API_KEY,
         )
 
     def star_chatter(self, mcp_server: list, functions: list = []):
