@@ -89,6 +89,12 @@ class AIAgent:
         session = SQLiteSession(f"chat_{chat_id}", "conversations.sqlite")
 
         @function_tool
+        def clear_history():
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(session.clear_session())
+            return "History cleared."
+
+        @function_tool
         def get_user_muted_case(
             group_title: str | None = None,
             group_username: str | None = None,
@@ -117,7 +123,7 @@ class AIAgent:
             res = await Runner.run(
                 self.star_chatter(
                     mcp_server=[mcp_server],
-                    functions=[get_user_muted_case, unmute_user],
+                    functions=[get_user_muted_case, unmute_user, clear_history],
                 ),
                 message.text,
                 session=session,
