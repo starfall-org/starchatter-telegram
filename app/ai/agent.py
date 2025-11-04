@@ -79,7 +79,8 @@ class AIAgent:
         @function_tool
         def clear_history():
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(session.clear_session())
+            result = asyncio.run_coroutine_threadsafe(session.clear_session(), loop)
+            print(result.result())
             return "History cleared."
 
         @function_tool
@@ -108,12 +109,14 @@ class AIAgent:
             user_id: int,
         ):
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(
+            result = asyncio.run_coroutine_threadsafe(
                 client.restrict_chat_member(
                     group_id, user_id, permissions=types.ChatPermissions(all_perms=True)
-                )
+                ),
+                loop,
             )
-            return "User unmuted."
+            print(result.result())
+            return "Action completed."
 
         async with mcp.MCPServerSse(
             name="Tools",

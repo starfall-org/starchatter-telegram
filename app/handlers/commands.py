@@ -1,3 +1,5 @@
+import asyncio
+from agents import SQLiteSession
 from ai.poem import get_poem
 from ai.nsfw import gen_img
 from config import OWNER_ID
@@ -121,3 +123,25 @@ async def nsfw_handler(client: Client, message: types.Message):
         reply_markup=types.InlineKeyboardMarkup([[button for button in basic_buttons]]),
     )
     await message.delete()
+
+
+@Client.on_message(filters.command("clear"))  # type: ignore
+async def clear_handler(client: Client, message: types.Message):
+    if message.chat.id < 0:
+        member = await message.chat.get_member(message.from_user.id)
+        if member.status not in [
+            enums.ChatMemberStatus.OWNER,
+            enums.ChatMemberStatus.ADMINISTRATOR,
+        ]:
+            await message.reply("You must be an admin to use this command.", quote=True)
+            return
+    await message.reply_chat_action(enums.ChatAction.TYPING)
+    chat_id = message.chat.id
+    session = SQLiteSession(f"chat_{chat_id}", "conversations.sqlite")
+    await session.clear_session()
+    msg = await message.reply(
+        "__Conversation cleared. The bot now forgets everything about you.__",
+        reply_markup=types.InlineKeyboardMarkup([[button for button in basic_buttons]]),
+    )
+    await asyncio.sleep(30)
+    await msg.delete()
