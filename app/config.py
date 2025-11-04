@@ -8,3 +8,5 @@ TURSO_DB_URL = environ["TURSO_DB_URL"]
 TURSO_AUTH_TOKEN = environ["TURSO_AUTH_TOKEN"]
 AI_MODEL = environ["AI_MODEL"]
 OWNER_ID = int(environ["OWNER_ID"])
+OPENAI_API_KEY = environ["OPENAI_API_KEY"]
+OPENAI_BASE_URL = environ["OPENAI_BASE_URL"]

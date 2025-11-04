@@ -1,60 +1,42 @@
 from datetime import datetime, timedelta
 
-from ai.base import BaseFactory
+from ai.agent import AIAgent
+from ai.shield import detector
 from database.client import Database
 from database.models import MutedCase, TelegramGroup, TelegramUser
 from pyrogram import Client, enums, filters, types
-from sqlalchemy import select
 
-base = BaseFactory()
 db = Database()
 
 
 @Client.on_message(
-    filters.incoming & ~filters.create(lambda _, __, m: m.text.startswith("/"))  # type: ignore
+    filters.incoming & filters.group,  # type: ignore
+    group=1,
 )
-async def chatbot_handler(client: Client, message: types.Message):
+async def spam_detector(client: Client, message: types.Message):
     text = message.text or message.caption or ""
-    full_name = (
-        message.sender_chat.title
-        if message.sender_chat
-        else message.from_user.full_name
-    )
-    filtered = (
-        client.me.username in text  # type: ignore
-        or "StarChatter" in text
-        or (
-            (
-                message.reply_to_message.from_user.id == client.me.id  # type: ignore
-                if message.reply_to_message.from_user
-                else False
-            )
-            if message.reply_to_message
-            else False
-        )
-        or message.chat.type == enums.ChatType.PRIVATE
-    )
-    is_group = message.chat.type in [
-        enums.ChatType.GROUP,
-        enums.ChatType.SUPERGROUP,
-    ]
 
-    if filtered:
-        await message.reply_chat_action(enums.ChatAction.TYPING)
-
-    async def mute_user(reason: str, duration: int = 0):
-        f"""
+    async def mute_user_and_delete_message(reason: str, duration: int = 0):
+        """
         Mute the user for a specified duration (in seconds).
         If duration less than 30, mute permanently.
 
         Args:
-            reason (str): Reason for muting the user in the language have language code '{message.from_user.language_code}'.
+            reason (str): Reason for muting the user.
             duration (int): Duration in seconds to mute the user. Default is 0 (permanent mute).
 
         Returns:
             str: Success message or error message if muting fails.
-
         """
+        bot_member = await client.get_chat_member(message.chat.id, client.me.id)  # type: ignore
+
+        if bot_member.status != enums.ChatMemberStatus.ADMINISTRATOR:
+            return "You must be an admin to mute users."
+        bot_privileges = bot_member.privileges
+
+        if not bot_privileges.can_restrict_members:
+            return "I don't have enough privileges to mute users."
+
         user_member = await client.get_chat_member(
             message.chat.id, message.from_user.id
         )
@@ -81,117 +63,37 @@ async def chatbot_handler(client: Client, message: types.Message):
             )
             await db.add(punished_case)
             await db.commit()
-            return "User has been muted successfully."
+            if bot_privileges.can_delete_messages:
+                return "User has been muted successfully."
+            else:
+                return "User has been muted successfully. You can't delete messages because you don't have enough privileges."
         except Exception as e:
             print(f"Error muting user: {e}")
             return str(e)
 
-    async def unmute_user(user_id: int, chat_id: int):
-        """
-        Unmute the user.
+    detected = await detector(message, tools=[mute_user_and_delete_message])
+    if detected:
+        await message.reply_chat_action(enums.ChatAction.TYPING)
+        await message.reply(detected)
 
-        Returns:
-            str: Success message or error message if unmuting fails.
-        """
-        try:
-            await message.chat.restrict_member(
-                user_id=message.from_user.id,
-                permissions=types.ChatPermissions(
-                    all_perms=True,
-                ),
-            )
-            return "User has been unmuted successfully."
-        except Exception as e:
-            print(f"Error unmuting user: {e}")
-            return str(e)
 
-    async def delete_message():
-        """
-        Delete the offending message.
+@Client.on_message(
+    (filters.mentioned | filters.private)
+    & filters.incoming
+    & ~filters.create(lambda _, __, m: m.text.startswith("/"))  # type: ignore
+)
+async def chatbot_handler(client: Client, message: types.Message):
+    await message.reply_chat_action(enums.ChatAction.TYPING)
+    agent = AIAgent()
 
-        Returns:
-            str: Success message or error message if deletion fails.
-        """
-        try:
-            await message.delete()
-            return "Message has been deleted successfully."
-        except Exception as e:
-            print(f"Error deleting message: {e}")
-            return str(e)
+    resp = await agent.run_chat(client, message)
+    if resp:
+        await message.reply(
+            resp,
+            quote=True,
+        )
 
-    async def get_user_muted_case(
-        group_title: str | None = None,
-        group_username: str | None = None,
-        group_id: int | None = None,
-    ) -> str:
-        """
-        Check if the user is currently muted in the chat. If muted, return json object of the muted case.
-
-        Args:
-            group_title (str | None, optional): Group title. Defaults to None.
-            group_username (str | None, optional): Group username. Defaults to None.
-            group_id (int | None, optional): Group ID. Defaults to None.
-
-        Returns:
-            str: Python object of the muted case or a message indicating no mute found.
-
-        """
-        if group_id:
-            query = select(MutedCase).where(
-                MutedCase.group_id == group_id,
-                MutedCase.user_id == message.from_user.id,
-            )
-            result = await db.execute(query)
-        if group_username and not group_id:
-            query = select(MutedCase).where(
-                MutedCase.group_username == group_username,
-                MutedCase.user_id == message.from_user.id,
-            )
-            result = await db.execute(query)
-        if group_title and not group_username and not group_id:
-            query = select(MutedCase)
-            results = await db.execute(query)
-            for item in results:
-                if (
-                    group_title.lower() in item.group_title.lower()
-                    and item.user_id == message.from_user.id
-                ):
-                    result = await db.execute(
-                        select(MutedCase).where(MutedCase.id == item.id)
-                    )
-                    break
-        else:
-            return "Please provide at least one identifier: group_title, group_username, or group_id."
-        muted_case = result.scalars().first()
-        if muted_case and isinstance(muted_case, MutedCase):
-            return str(muted_case)
-        return "This case not found in database."
-
-    tools = [
-        unmute_user,
-        get_user_muted_case,
-        delete_message,
-    ]
-    if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
-        tools.append(mute_user)
-
-    photo_bytes = None
-    if message.photo:
-        photo = await message.download(in_memory=True)
-        photo_bytes = photo.getvalue()  # type: ignore
-
-    async for content, tool_called in base.chat(
-        user=full_name,
-        message=text,
-        chat_id=message.chat.id,
-        is_group=is_group,
-        filtered=filtered,
-        tools=tools,
-        photo=photo_bytes,
-    ):
-        if tool_called or filtered:
-            await message.reply(content, reply_to_message_id=message.id)
-    if filtered and not message.sender_chat:
+    if not message.sender_chat:
         user = await db.get(TelegramUser, id=message.from_user.id)
         user = user.scalars().first()
         if not user:

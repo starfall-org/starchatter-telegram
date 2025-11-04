@@ -1,4 +1,5 @@
-openai==2.3.0
+openai
+openai-agents
 ollama
 sqlalchemy-libsql
 TgCrypto==1.2.5

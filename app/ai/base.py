@@ -1,122 +1,41 @@
-import base64
-import inspect
-import shelve
-
-from config import AI_MODEL, OLLAMA_URL
-from ollama import AsyncClient
-
-kv = shelve.open("cache.db", writeback=True)
+import os
+from agents import function_tool, set_default_openai_api, set_default_openai_client
+from config import OPENAI_API_KEY, OPENAI_BASE_URL
+from openai import AsyncOpenAI, OpenAI
 
 
-class BaseFactory:
-    _cache_ttl = 6000
+openai = AsyncOpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
 
-    def __init__(self):
-        self.client = AsyncClient(
-            host=OLLAMA_URL,
-        )
-        self.instructions = "You are StarChatter, you can chat with users, manage group, handle tasks and provide useful information. If user ask you to unmute them from a group, you will call get_user_muted_case to check and you will decide unmute them or not."
 
-    async def _get_chat_session_cached(self, chat_id):
-        session = kv.get(f"session_{chat_id}")
-        if not session:
-            session = kv[f"session_{chat_id}"] = []
-        return session
+def setup_agent():
+    set_default_openai_client(openai)
+    set_default_openai_api("chat_completions")
 
-    async def _update_chat_session_cache(self, chat_id, chat_session):
-        kv[f"session_{chat_id}"] = chat_session
 
-    async def chat(
-        self,
-        user: str,
-        message: str,
-        chat_id: int,
-        is_group: bool,
-        filtered: bool,
-        tools: list | None = None,
-        photo: bytes | None = None,
-    ):
-        chat_session = await self._get_chat_session_cached(chat_id)
-        if is_group:
-            self.instructions = (
-                self.instructions
-                + f"""\nYou will analyze the message to check if it is spam, advertising, illegal and any other unsafe content that you realize. If yes:
-                - Send a report message include: the reason, their name "**{user}**" and tell them contact admin to unmute or contact you to appeal. The report message should have 2 versions: 1. English, 2. Same as the language in the message.
-                - Delete the message.
-                """
-            )
-        if photo:
-            encoded_photo = base64.b64encode(photo).decode("utf-8")
-            chat_session.append(
-                {
-                    "role": "user",
-                    "content": message,
-                    "image": [encoded_photo],
-                }
-            )
-        else:
-            chat_session.append({"role": "user", "content": message})
-        if not filtered:
-            messages = [
-                {
-                    "role": "system",
-                    "content": self.instructions,
-                },
-                {
-                    "role": "user",
-                    "content": message,
-                },
-            ]
+def models():
+    client = OpenAI(base_url=OPENAI_BASE_URL, api_key=OPENAI_API_KEY)
+    return client.models.list()
 
-        else:
-            messages = [
-                {
-                    "role": "system",
-                    "content": self.instructions,
-                },
-                *(
-                    {"role": cm["role"], "content": cm["content"]}
-                    for cm in chat_session
-                ),
-            ]
 
-        response = await self.client.chat(
-            model=AI_MODEL, messages=messages, tools=tools
-        )
+def get_model():
+    selected_model = os.getenv("AGENT_MODEL")
+    all_models = models()
+    first_model = None
+    for model in all_models:
+        if model.id:
+            if not first_model:
+                first_model = model
+            if model.id == selected_model:
+                return model
+    if first_model:
+        return first_model
 
-        chat_session.append(response.message)
-        if tools:
-            if response.message.tool_calls:
-                for call in response.message.tool_calls:
-                    func = next(
-                        (tool for tool in tools if tool.__name__ == call.function.name),
-                        None,
-                    )
-                    args = call.function.arguments
-                    if inspect.iscoroutinefunction(func):
-                        tool_response = await func(**args)
-                        chat_session.append(
-                            {
-                                "role": "tool",
-                                "tool_name": call.function.name,
-                                "content": str(tool_response),
-                            }
-                        )
-                        response = await self.client.chat(
-                            model=AI_MODEL,
-                            messages=[
-                                {"role": "system", "content": self.instructions},
-                                *(
-                                    {"role": cm["role"], "content": cm["content"]}
-                                    for cm in chat_session
-                                ),
-                            ],
-                        )
-                        yield response.message.content or "No response from AI.", True
-        else:
-            content = response.message.content
 
-            yield content or "Something went wrong! Please try again later.", False
+@function_tool
+def list_models():
+    return models().model_dump_json()
 
-        if filtered:
-            await self._update_chat_session_cache(chat_id, chat_session)
+
+@function_tool
+def set_model(model_id: str):
+    os.environ["AGENT_MODEL"] = model_id
