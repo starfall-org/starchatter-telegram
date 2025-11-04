@@ -86,7 +86,7 @@ class AIAgent:
 
     async def run_chat(self, client: Client, message: types.Message):
         chat_id = message.chat.id
-        session = SQLiteSession(f"chat_{chat_id}")
+        session = SQLiteSession(f"chat_{chat_id}", "conversations.sqlite")
 
         @function_tool
         def get_user_muted_case(
