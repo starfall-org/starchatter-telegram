@@ -1,11 +1,13 @@
 import asyncio
 
-from agents import Agent, Runner, function_tool, mcp, SQLiteSession
+from agents import Agent, Runner, SQLiteSession, function_tool, mcp
+from agents.extensions.models.litellm_model import LitellmModel
 from ai.base import get_model, list_models, set_model
 from database.client import Database
 from database.models import MutedCase
 from pyrogram import Client, types
 from sqlalchemy import select
+from config import OPENAI_API_KEY, OPENAI_BASE_URL
 
 db = Database()
 
@@ -64,18 +66,22 @@ def _get_user_muted_case(
 
 class AIAgent:
     def __init__(self):
-        model = get_model()
-        self.model_id = None
-        if model:
-            self.model_id = model.id
+        self.model_id = get_model()
+        self.litellm_model = LitellmModel(
+            model=self.model_id,
+            base_url=OPENAI_BASE_URL,
+            api_key=OPENAI_API_KEY,
+        )
 
-    def star_chatter(self, mcp_server: mcp.MCPServerSse, functions: list = []):
+    def star_chatter(self, mcp_server: list, functions: list = []):
         functions.append(list_models)
         functions.append(set_model)
         return Agent(
             "StarChatter",
             instructions=f"You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. Remember to use tools if needed.",
             tools=functions,
+            model=self.litellm_model,
+            mcp_servers=mcp_server,
         )
 
     async def run_chat(self, client: Client, message: types.Message):
@@ -110,7 +116,8 @@ class AIAgent:
         ) as mcp_server:
             res = await Runner.run(
                 self.star_chatter(
-                    mcp_server=mcp_server, functions=[get_user_muted_case, unmute_user]
+                    mcp_server=[mcp_server],
+                    functions=[get_user_muted_case, unmute_user],
                 ),
                 message.text,
                 session=session,
