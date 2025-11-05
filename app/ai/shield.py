@@ -29,13 +29,14 @@ async def detector(
 - Mute the user
 - Send a report message in format:
 '''
-❌**VIOLATION DETECTED:**
+❌Violation detected in __**[{user}](tg://user?id={user_id})**__'s message.
 
-<your comment and action in English>
+<your comment in English. Explain why the message was deleted and the user was muted. Remember to mention the user>
 
 ----
 
-<your comment and action in the user language by analyzing the message or their name>
+<the user language version>
+
 '''
 +   **{"Chat Sender" if sender_chat else "User"} name:** "**{sender_chat or user}**"
 +   **{"Chat Sender" if sender_chat else "User"} ID: `{user_id}`
