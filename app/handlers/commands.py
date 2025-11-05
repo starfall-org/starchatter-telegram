@@ -2,6 +2,7 @@ import asyncio
 from agents import SQLiteSession
 from ai.poem import get_poem
 from ai.nsfw import gen_img
+from ai.base import models, get_model
 from config import OWNER_ID
 from database.client import Database
 from database.models import GroupMember, TelegramGroup, TelegramUser
@@ -145,3 +146,24 @@ async def clear_handler(client: Client, message: types.Message):
     )
     await asyncio.sleep(30)
     await msg.delete()
+
+
+@Client.on_message(
+    filters.command("models") & filters.users(OWNER_ID)  # type: ignore
+)
+async def models_handler(client: Client, message: types.Message):
+    await message.reply_chat_action(enums.ChatAction.TYPING)
+    all_models = models()
+    current_model = get_model()
+    markup = types.InlineKeyboardMarkup(
+        [
+            [
+                types.InlineKeyboardButton(
+                    text=model.id,
+                    callback_data=f"openai/{model.id}",
+                )
+                for model in all_models
+            ]
+        ]
+    )
+    await message.reply(f"Current model: `{current_model}`", reply_markup=markup)
