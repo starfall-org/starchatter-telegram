@@ -10,6 +10,7 @@ from database.models import (
 from pyrogram import Client, enums, filters, types
 from sqlalchemy import select
 from utils import is_chat_admin, is_chat_owner, is_owner
+from config import OWNER_ID
 
 db = Database()
 
@@ -76,7 +77,7 @@ async def group_admin_menu_handler(client: Client, callback_query: types.Callbac
 
 
 @Client.on_callback_query(
-    filters.regex(r"^(openai/)$")  # type: ignore
+    filters.regex(r"^(openai/)$") & filters.user(OWNER_ID)  # type: ignore
 )
 async def select_model_handler(client: Client, callback_query: types.CallbackQuery):
     await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)

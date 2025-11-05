@@ -149,7 +149,7 @@ async def clear_handler(client: Client, message: types.Message):
 
 
 @Client.on_message(
-    filters.command("models") & filters.users(OWNER_ID)  # type: ignore
+    filters.command("models") & filters.user(OWNER_ID)  # type: ignore
 )
 async def models_handler(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)
