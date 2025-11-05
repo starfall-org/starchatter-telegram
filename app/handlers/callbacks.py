@@ -82,20 +82,8 @@ async def group_admin_menu_handler(client: Client, callback_query: types.Callbac
 async def select_model_handler(client: Client, callback_query: types.CallbackQuery):
     await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
     model_id = str(callback_query.data).split("/")[1]
-    all_models = models()
-    markup = types.InlineKeyboardMarkup(
-        [
-            [
-                types.InlineKeyboardButton(
-                    text=model.id,
-                    callback_data=f"openai/{model.id}",
-                )
-            ]
-            for model in all_models
-        ]
-    )
     os.environ["AGENT_MODEL"] = model_id
     await callback_query.answer(f"Selected model: `{model_id}`", show_alert=True)
-    await callback_query.message.edit_text(
-        f"Selected model: `{model_id}`", reply_markup=markup
-    )
+    await callback_query.message.edit_text(f"Model `{model_id}` selected.")
+    await asyncio.sleep(5)
+    await callback_query.message.delete()
