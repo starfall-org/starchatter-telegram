@@ -91,6 +91,7 @@ async def chatbot_handler(client: Client, message: types.Message):
         await message.reply(
             resp,
             quote=True,
+            parse_mode=enums.ParseMode.MARKDOWN,
         )
 
     if not message.sender_chat:
