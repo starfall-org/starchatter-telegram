@@ -20,7 +20,7 @@ db = Database()
 )
 async def group_admin_menu_handler(client: Client, callback_query: types.CallbackQuery):
     await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
-    action = callback_query.data
+    action = str(callback_query.data)
     chat_id = callback_query.message.chat.id
     group = await db.get(TelegramGroup, id=chat_id)
     if group:
