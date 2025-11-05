@@ -31,11 +31,11 @@ async def detector(
 '''
 ❌**VIOLATION DETECTED:**
 
-<your comment in English>
+<your comment and action in English>
 
 ----
 
-<your comment in user language>
+<your comment and action in the user language by analyzing the message or their name>
 '''
 +   **{"Chat Sender" if sender_chat else "User"} name:** "**{sender_chat or user}**"
 +   **{"Chat Sender" if sender_chat else "User"} ID: `{user_id}`

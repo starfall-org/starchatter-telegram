@@ -33,7 +33,8 @@ async def spam_detector(client: Client, message: types.Message):
         if bot_member.status != enums.ChatMemberStatus.ADMINISTRATOR:
             return "You must be an admin to mute users."
         bot_privileges = bot_member.privileges
-
+        if bot_privileges.can_delete_messages:
+            await message.delete()
         if not bot_privileges.can_restrict_members:
             return "I don't have enough privileges to mute users."
 
@@ -63,10 +64,8 @@ async def spam_detector(client: Client, message: types.Message):
             )
             await db.add(punished_case)
             await db.commit()
-            if bot_privileges.can_delete_messages:
-                return "User has been muted successfully."
-            else:
-                return "User has been muted successfully. You can't delete messages because you don't have enough privileges."
+            return "User has been muted successfully."
+
         except Exception as e:
             print(f"Error muting user: {e}")
             return str(e)
