@@ -1,12 +1,8 @@
 import os
 
-from agents import function_tool, set_default_openai_api
+from agents import function_tool
 from config import AI_API_KEY, AI_BASE_URL
 from openai import OpenAI
-
-
-def setup_agent():
-    set_default_openai_api("chat_completions")
 
 
 def models():

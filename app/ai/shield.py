@@ -15,6 +15,7 @@ async def detector(
     tools: list | None = None,
     photo: bytes | None = None,
 ):
+    text = message.text or message.caption or ""
     sender_chat = None
     if message.sender_chat:
         sender_chat = message.sender_chat.title
@@ -49,7 +50,7 @@ async def detector(
             },
             {
                 "role": "user",
-                "content": message,
+                "content": text,
                 "image": images,
             },
         ]
@@ -62,7 +63,7 @@ async def detector(
             },
             {
                 "role": "user",
-                "content": message,
+                "content": text,
             },
         ]
 

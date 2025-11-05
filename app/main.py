@@ -4,13 +4,11 @@ uvloop.install()
 
 
 async def main():
-    from ai.base import setup_agent
     from client import client
     from database.client import Database
     from pyrogram import idle
 
     await client.start()
-    setup_agent()
     print("Bot started.")
     db = Database()
     db.init_db()

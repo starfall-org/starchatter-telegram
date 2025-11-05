@@ -3,11 +3,11 @@ import asyncio
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
 from ai.base import get_model, list_models, set_model
+from config import AI_API_KEY, AI_BASE_URL
 from database.client import Database
 from database.models import MutedCase
 from pyrogram import Client, types
 from sqlalchemy import select
-from config import AI_API_KEY, AI_BASE_URL
 
 db = Database()
 
@@ -79,7 +79,7 @@ class AIAgent:
         @function_tool
         def clear_history():
             loop = asyncio.get_event_loop()
-            result = asyncio.run_coroutine_threadsafe(session.clear_session(), loop)
+            asyncio.run_coroutine_threadsafe(session.clear_session(), loop)
             return "History cleared."
 
         @function_tool
@@ -108,13 +108,13 @@ class AIAgent:
             user_id: int,
         ):
             loop = asyncio.get_event_loop()
-            result = asyncio.run_coroutine_threadsafe(
+            asyncio.run_coroutine_threadsafe(
                 client.restrict_chat_member(
                     group_id, user_id, permissions=types.ChatPermissions(all_perms=True)
                 ),
                 loop,
             )
-            
+
             return "Action completed."
 
         async with mcp.MCPServerSse(
