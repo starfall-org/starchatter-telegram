@@ -16,7 +16,7 @@ db = Database()
 
 
 @Client.on_callback_query(
-    filters.regex(r"^(_chatbot|_anti_spam|_goodbye)$")  # type: ignore
+    filters.regex(r"menu/")  # type: ignore
 )
 async def group_admin_menu_handler(client: Client, callback_query: types.CallbackQuery):
     await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
@@ -45,7 +45,7 @@ async def group_admin_menu_handler(client: Client, callback_query: types.Callbac
         ):
             await callback_query.answer("You must be an admin to perform this action.")
             return
-        if action == "disable_chatbot":
+        if action == "menu/chatbot":
             cmd = select(TelegramGroup).where(TelegramGroup.id == chat_id)
             result = await db.execute(cmd)
             if result:
@@ -57,7 +57,7 @@ async def group_admin_menu_handler(client: Client, callback_query: types.Callbac
             await callback_query.message.edit_text(
                 "Chatbot has been disabled for this group."
             )
-        elif action == "disable_anti_spam":
+        elif action == "menu/anti_spam":
             cmd = select(TelegramGroup).where(TelegramGroup.id == chat_id)
             result = await db.execute(cmd)
             if result:
@@ -69,7 +69,7 @@ async def group_admin_menu_handler(client: Client, callback_query: types.Callbac
                 await callback_query.message.edit_text(
                     "Anti-Spam has been disabled for this group."
                 )
-        elif action == "goodbye":
+        elif action == "menu/goodbye":
             await callback_query.answer("Goodbye! 👋")
             await callback_query.message.edit_text("Goodbye! 👋")
             await asyncio.sleep(3)
@@ -77,7 +77,7 @@ async def group_admin_menu_handler(client: Client, callback_query: types.Callbac
 
 
 @Client.on_callback_query(
-    filters.regex(r"^(openai/)$") & filters.user(OWNER_ID)  # type: ignore
+    filters.regex(r"openai/") & filters.user(OWNER_ID)  # type: ignore
 )
 async def select_model_handler(client: Client, callback_query: types.CallbackQuery):
     await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
@@ -90,8 +90,8 @@ async def select_model_handler(client: Client, callback_query: types.CallbackQue
                     text=model.id,
                     callback_data=f"openai/{model.id}",
                 )
-                for model in all_models
             ]
+            for model in all_models
         ]
     )
     os.environ["AGENT_MODEL"] = model_id

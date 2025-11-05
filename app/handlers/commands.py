@@ -82,15 +82,15 @@ async def group_menu(client: Client, message: types.Message):
                 types.InlineKeyboardButton(
                     text=("Disable" if group.disable_chatbot else "Enable")
                     + " Chatbot",
-                    callback_data="_chatbot",
+                    callback_data="menu/chatbot",
                 ),
                 types.InlineKeyboardButton(
                     text=("Disable" if group.disable_anti_spam else "Enable")
                     + " Anti-Spam",
-                    callback_data="_anti_spam",
+                    callback_data="menu/anti_spam",
                 ),
             ],
-            [types.InlineKeyboardButton(text="Goodbye", callback_data="_goodbye")],
+            [types.InlineKeyboardButton(text="Goodbye", callback_data="menu/goodbye")],
             [button for button in basic_buttons],
         ]
     )
@@ -162,8 +162,8 @@ async def models_handler(client: Client, message: types.Message):
                     text=model.id,
                     callback_data=f"openai/{model.id}",
                 )
-                for model in all_models
             ]
+            for model in all_models
         ]
     )
     await message.reply(f"Current model: `{current_model}`", reply_markup=markup)
