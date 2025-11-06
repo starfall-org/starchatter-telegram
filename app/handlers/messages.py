@@ -14,66 +14,21 @@ db = Database()
     group=1,
 )
 async def spam_detector(client: Client, message: types.Message):
-    text = message.text or message.caption or ""
-
-    async def mute_user_and_delete_message(reason: str, duration: int = 0):
+    def violation_detected(text):
         """
-        Mute the user for a specified duration (in seconds).
-        If duration less than 30, mute permanently.
-
-        Args:
-            reason (str): Reason for muting the user.
-            duration (int): Duration in seconds to mute the user. Default is 0 (permanent mute).
-
-        Returns:
-            str: Success message or error message if muting fails.
+        Call it if violation detected
         """
-        bot_member = await client.get_chat_member(message.chat.id, client.me.id)  # type: ignore
+        return True
 
-        if bot_member.status != enums.ChatMemberStatus.ADMINISTRATOR:
-            return "You must be an admin to mute users."
-        bot_privileges = bot_member.privileges
-        if bot_privileges.can_delete_messages:
-            await message.delete()
-        if not bot_privileges.can_restrict_members:
-            return "I don't have enough privileges to mute users."
-
-        user_member = await client.get_chat_member(
-            message.chat.id, message.from_user.id
-        )
-        if user_member.status in [
-            enums.ChatMemberStatus.ADMINISTRATOR,
-            enums.ChatMemberStatus.OWNER,
-        ]:
-            return "Cannot mute an admin or owner."
-        try:
-            await message.chat.restrict_member(
-                user_id=message.from_user.id,
-                permissions=types.ChatPermissions(
-                    all_perms=False,
-                ),
-                until_date=(datetime.now() + timedelta(seconds=duration)),
-            )
-            punished_case = MutedCase(
-                user_id=message.from_user.id,
-                group_id=message.chat.id,
-                group_title=message.chat.title,
-                group_username=message.chat.username,
-                reason=reason,
-                content=text,
-            )
-            await db.add(punished_case)
-            await db.commit()
-            return "User has been muted successfully."
-
-        except Exception as e:
-            print(f"Error muting user: {e}")
-            return str(e)
-
-    detected = await detector(message, tools=[mute_user_and_delete_message])
+    detected = await detector(message, tools=[violation_detected])
     if detected:
+        agent = AIAgent()
         await message.reply_chat_action(enums.ChatAction.TYPING)
-        await message.reply(detected)
+        await message.reply(
+            await agent.run_chat(client, message, detected),
+            quote=True,
+            parse_mode=enums.ParseMode.MARKDOWN,
+        )
 
 
 @Client.on_message(

@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timedelta
 
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
@@ -72,12 +73,14 @@ class AIAgent:
             mcp_servers=mcp_server,
         )
 
-    async def run_chat(self, client: Client, message: types.Message):
+    async def run_chat(
+        self, client: Client, message: types.Message, detected: str | None = None
+    ):
         chat_id = message.chat.id
         session = SQLiteSession(f"chat_{chat_id}", "conversations.sqlite")
 
         @function_tool
-        def clear_history():
+        def clear_your_memory():
             loop = asyncio.get_event_loop()
             asyncio.run_coroutine_threadsafe(session.clear_session(), loop)
             return "History cleared."
@@ -103,6 +106,48 @@ class AIAgent:
             return _get_user_muted_case(message, group_title, group_username, group_id)
 
         @function_tool
+        def mute_user(
+            group_id: int,
+            user_id: int,
+            reason: str,
+            duration_seconds: int = 0,
+        ):
+            """
+            Mute the user for a specified duration (in seconds).
+            If duration less than 30s, mute permanently.
+
+            Args:
+                reason (str): Reason for muting the user.
+                duration_seconds (int): Duration in seconds to mute the user. Default is 0 (permanent mute).
+
+            Returns:
+                str: Success message or error message if muting fails.
+            """
+            text = message.text or message.caption or ""
+            loop = asyncio.get_event_loop()
+            asyncio.run_coroutine_threadsafe(
+                client.restrict_chat_member(
+                    group_id,
+                    user_id,
+                    permissions=types.ChatPermissions(
+                        all_perms=False,
+                    ),
+                    until_date=(datetime.now() + timedelta(seconds=duration_seconds)),
+                ),
+                loop,
+            )
+            punished_case = MutedCase(
+                user_id=message.from_user.id,
+                group_id=message.chat.id,
+                group_title=message.chat.title,
+                group_username=message.chat.username,
+                reason=reason,
+                content=text,
+            )
+            asyncio.run_coroutine_threadsafe(db.add(punished_case), loop)
+            return "Action completed."
+
+        @function_tool
         def unmute_user(
             group_id: int,
             user_id: int,
@@ -117,6 +162,12 @@ class AIAgent:
 
             return "Action completed."
 
+        @function_tool
+        def delete_message(message_id: int):
+            loop = asyncio.get_event_loop()
+            asyncio.run_coroutine_threadsafe(message.delete(), loop)
+            return "Action completed."
+
         async with mcp.MCPServerSse(
             name="Tools",
             params={"url": "https://nymbo-tools.hf.space/gradio_api/mcp/sse"},
@@ -125,9 +176,15 @@ class AIAgent:
             res = await Runner.run(
                 self.star_chatter(
                     mcp_server=[mcp_server],
-                    functions=[get_user_muted_case, unmute_user, clear_history],
+                    functions=[
+                        get_user_muted_case,
+                        mute_user,
+                        unmute_user,
+                        delete_message,
+                        clear_your_memory,
+                    ],
                 ),
-                message.text,
+                detected or message.text,
                 session=session,
             )
             return res.final_output
