@@ -1,9 +1,7 @@
-from datetime import datetime, timedelta
-
 from ai.agent import AIAgent
 from ai.shield import detector
 from database.client import Database
-from database.models import MutedCase, TelegramGroup, TelegramUser
+from database.models import TelegramGroup, TelegramUser
 from pyrogram import Client, enums, filters, types
 
 db = Database()
