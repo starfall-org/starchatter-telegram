@@ -9,14 +9,13 @@ db = Database()
 
 @Client.on_message(
     filters.incoming & filters.group,  # type: ignore
-    group=1,
 )
 async def spam_detector(client: Client, message: types.Message):
-    def violent_detection(text):
+    def violent_detection(is_violent: bool):
         """
         Call it if violation detected
         """
-        return True
+        return is_violent
 
     detected = await detector(message, tools=[violent_detection])
     if detected:
@@ -36,6 +35,8 @@ async def spam_detector(client: Client, message: types.Message):
                 quote=True,
                 parse_mode=enums.ParseMode.MARKDOWN,
             )
+    else:
+        message.continue_propagation()
 
 
 @Client.on_message(
