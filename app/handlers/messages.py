@@ -11,9 +11,15 @@ db = Database()
     filters.incoming & filters.group,  # type: ignore
 )
 async def spam_detector(client: Client, message: types.Message):
-    async def violent_detection(is_violent: bool):
+    async def violent_detection(is_violent: bool = False):
         """
         Call it if violation detected
+
+        Args:
+            is_violent (bool): Violation detected
+
+        Returns:
+            bool: Violation detected
         """
         return is_violent
 
