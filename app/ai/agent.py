@@ -179,20 +179,20 @@ class AIAgent:
             return "Action completed."
 
         @function_tool
-        def delete_message(message_id: int | None = None):
+        def delete_message(message_ids: int | list[int] | None = None):
             """Delete message with id if provided, otherwise delete the message that triggered the command.
 
             Args:
-                message_id (int | None, optional): Message ID to delete. Defaults to None and deletes the message that triggered the command.
+                message_ids (int | list[int] | None, optional): Message ID or list of message IDs to delete. Defaults to None and deletes the message that triggered the command.
 
             Returns:
                 str: Success message
 
             """
             loop = asyncio.get_event_loop()
-            if message_id:
+            if message_ids:
                 asyncio.run_coroutine_threadsafe(
-                    client.delete_messages(message.chat.id, [message_id]), loop
+                    client.delete_messages(message.chat.id, message_ids), loop
                 )
             else:
                 asyncio.run_coroutine_threadsafe(message.delete(), loop)

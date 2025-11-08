@@ -1,7 +1,5 @@
 import base64
-import inspect
-
-from agents import SQLiteSession, TResponseInputItem
+import os
 
 from config import AI_MODEL, OLLAMA_URL
 from ollama import AsyncClient
@@ -10,6 +8,20 @@ from pyrogram.types import Message
 client = AsyncClient(
     host=OLLAMA_URL,
 )
+
+
+def get_violation_rules():
+    """
+    Get violation rules variable.
+
+    Returns:
+        str: Violation rules
+    """
+    preset = os.environ.get(
+        "PRESET_VIOLATION_RULES",
+        "spam, unsafe advertisement.",
+    )
+    return preset
 
 
 async def detector(
@@ -26,7 +38,7 @@ async def detector(
     elif message.from_user:
         user = message.from_user.full_name
         user_id = message.from_user.id
-    instructions = """I will give you a message and you will analyze. If the message is spam, advertising, or illegal, you will call violent_detection function and send me your report about it."""
+    instructions = """I will give you a message and you will analyze. If the message matches the violation rules, you will call violent_detection function and send your report about it."""
     if photo:
         encoded_photo = base64.b64encode(photo).decode("utf-8")
         images = [encoded_photo]
@@ -53,6 +65,8 @@ async def detector(
                 "content": text,
             },
         ]
+    if tools:
+        tools.append(get_violation_rules)
 
     response = await client.chat(model=AI_MODEL, messages=messages, tools=tools)
 
@@ -82,10 +96,10 @@ async def detector(
                     )
 
                     return (
-                        "__(\nSYSTEM REPORT: ❌Violation detected\n"
+                        "__(\nSYSTEM WARNING: ❌Violation detected\n"
                         + f"**User Fullname:** {user}\n"
                         + f"**User ID:** {user_id}\n\n"
-                        + f"**Message:** {response.message.content}\n"
-                        + "**Notice:** Please verify the message if it is a violation case. If it is a violation, you will delete the message and mute the user, if user's message is not English, you will send 2 versions of the message in English and that language as well. If you think this is a mistake, just ignore this report.\n)__\n\n"
+                        + f"**System Response:** {response.message.content}\n"
+                        + "**Notice:** Please verify the user's message. If you think this is a violation, you will delete the message and mute the user and send a report. If the user's message is not English, you will send 2 versions of the report, one in English and one in that language. \nIf you think this is a mistake, just ignore this warning.\n)__\n\n"
                         + text
                     )
