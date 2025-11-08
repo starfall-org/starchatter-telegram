@@ -26,7 +26,7 @@ async def detector(
     elif message.from_user:
         user = message.from_user.full_name
         user_id = message.from_user.id
-    instructions = """I will give you a message and you will analyze. If the message is spam, advertising, or illegal, you will call violent_detection function and send me your comment about it."""
+    instructions = """I will give you a message and you will analyze. If the message is spam, advertising, or illegal, you will call violent_detection function and send me your report about it."""
     if photo:
         encoded_photo = base64.b64encode(photo).decode("utf-8")
         images = [encoded_photo]
@@ -64,10 +64,8 @@ async def detector(
                     None,
                 )
                 args = call.function.arguments
-                if inspect.iscoroutinefunction(func):
-                    tool_response = await func(**args)
-                else:
-                    tool_response = func(**args)
+                tool_response = await func(**args)
+
                 if tool_response:
                     messages.append(
                         {
