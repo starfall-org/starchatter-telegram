@@ -12,21 +12,30 @@ db = Database()
     group=1,
 )
 async def spam_detector(client: Client, message: types.Message):
-    def violation_detected(text):
+    def violent_detection(text):
         """
         Call it if violation detected
         """
         return True
 
-    detected = await detector(message, tools=[violation_detected])
+    detected = await detector(message, tools=[violent_detection])
     if detected:
         agent = AIAgent()
         await message.reply_chat_action(enums.ChatAction.TYPING)
-        await message.reply(
-            await agent.run_chat(client, message, detected),
-            quote=True,
-            parse_mode=enums.ParseMode.MARKDOWN,
-        )
+        resp = await agent.run_chat(client, message, detected)
+        if len(resp) > 4000:
+            for i in range(0, len(resp), 4000):
+                await message.reply(
+                    resp[i : i + 4000],
+                    quote=True,
+                    parse_mode=enums.ParseMode.MARKDOWN,
+                )
+        else:
+            await message.reply(
+                resp,
+                quote=True,
+                parse_mode=enums.ParseMode.MARKDOWN,
+            )
 
 
 @Client.on_message(
@@ -40,11 +49,19 @@ async def chatbot_handler(client: Client, message: types.Message):
 
     resp = await agent.run_chat(client, message)
     if resp:
-        await message.reply(
-            resp,
-            quote=True,
-            parse_mode=enums.ParseMode.MARKDOWN,
-        )
+        if len(resp) > 4000:
+            for i in range(0, len(resp), 4000):
+                await message.reply(
+                    resp[i : i + 4000],
+                    quote=True,
+                    parse_mode=enums.ParseMode.MARKDOWN,
+                )
+        else:
+            await message.reply(
+                resp,
+                quote=True,
+                parse_mode=enums.ParseMode.MARKDOWN,
+            )
 
     if not message.sender_chat:
         user = await db.get(TelegramUser, id=message.from_user.id)
