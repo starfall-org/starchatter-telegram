@@ -64,8 +64,10 @@ async def detector(
                     None,
                 )
                 args = call.function.arguments
-                tool_response = await func(**args)
-
+                if func:
+                    tool_response = await func(**args)
+                else:
+                    tool_response = None
                 if tool_response:
                     messages.append(
                         {
