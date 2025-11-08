@@ -129,7 +129,7 @@ class AIAgent:
     ):
         return Agent(
             "StarChatter",
-            instructions=f"You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. Remember to use tools if required. \nuser_message_id: {message.id}\nassistant_message_id: list of [user_message_id + (1 per 4000 characters)]",
+            instructions=f"You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. \n\nuser_id: {message.from_user.id} \nuser_message_id: {message.id} \nassistant_message_id: list of [user_message_id + (1 per 4000 characters)]",
             tools=functions,
             model=self.litellm_model,
             mcp_servers=mcp_server,
