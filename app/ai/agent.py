@@ -21,35 +21,79 @@ def _get_user_muted_case(
 ) -> str | None:
     session = db._get_session()
     if session:
-        if group_id:
-            query = select(MutedCase).where(
-                MutedCase.group_id == group_id,
-                MutedCase.user_id == message.from_user.id,
-            )
-            result = session.execute(query)
-        if group_username and not group_id:
-            query = select(MutedCase).where(
-                MutedCase.group_username == group_username,
-                MutedCase.user_id == message.from_user.id,
-            )
-            result = session.execute(query)
         if group_title and not group_username and not group_id:
             query = select(MutedCase)
-            results = session.execute(query)
+            results = session.execute(query).scalars().all()
             for item in results:
                 if (
                     group_title.lower() in item.group_title.lower()
                     and item.user_id == message.from_user.id
                 ):
-                    result = session.execute(
-                        select(MutedCase).where(MutedCase.id == item.id)
-                    )
+                    muted_case = item
                     break
+                else:
+                    muted_case = None
+        elif group_username or group_id:
+            if group_id:
+                query = select(MutedCase).where(
+                    MutedCase.group_id == group_id,
+                    MutedCase.user_id == message.from_user.id,
+                )
+            if group_username and not group_id:
+                query = select(MutedCase).where(
+                    MutedCase.group_username == group_username,
+                    MutedCase.user_id == message.from_user.id,
+                )
+
+            result = session.execute(query)
+            muted_case = result.scalars().first()
         else:
-            return "Please provide at least one identifier: group_title, group_username, or group_id."
-        muted_case = result.scalars().first()
+            return "Please provide group title, group username or group id."
         if muted_case and isinstance(muted_case, MutedCase):
             return str(muted_case)
+        return "This case not found in database."
+
+
+def _mark_user_muted_case_as_solved(
+    message: types.Message,
+    group_id: int | None = None,
+    group_username: str | None = None,
+    group_title: str | None = None,
+):
+    session = db._get_session()
+    if session:
+        if group_title and not group_username and not group_id:
+            query = select(MutedCase)
+            results = session.execute(query).scalars().all()
+            for item in results:
+                if (
+                    group_title.lower() in item.group_title.lower()
+                    and item.user_id == message.from_user.id
+                ):
+                    muted_case = item
+                    break
+                else:
+                    muted_case = None
+        elif group_username or group_id:
+            if group_id:
+                query = select(MutedCase).where(
+                    MutedCase.group_id == group_id,
+                    MutedCase.user_id == message.from_user.id,
+                )
+            if group_username and not group_id:
+                query = select(MutedCase).where(
+                    MutedCase.group_username == group_username,
+                    MutedCase.user_id == message.from_user.id,
+                )
+
+            result = session.execute(query)
+            muted_case = result.scalars().first()
+        else:
+            return "Please provide group title, group username or group id."
+        if muted_case and isinstance(muted_case, MutedCase):
+            session.delete(muted_case)
+            session.commit()
+            return "This case marked as solved."
         return "This case not found in database."
 
 
@@ -105,23 +149,28 @@ class AIAgent:
 
         @function_tool
         def get_user_muted_case(
-            group_title: str | None = None,
-            group_username: str | None = None,
-            group_id: int | None = None,
+            group_identifier: str | int | None = None,
         ):
             """
             Check if the user is currently muted in the chat. If muted, return json object of the muted case.
 
             Args:
-                group_title (str | None, optional): Group title. Defaults to None.
-                group_username (str | None, optional): Group username. Defaults to None.
-                group_id (int | None, optional): Group ID. Defaults to None.
+                group_identifier (str | int | None): Group identifier. Can be group title, group username, or group id.
 
             Returns:
                 str: Python object of the muted case or a message indicating no mute found.
 
             """
-            return _get_user_muted_case(message, group_title, group_username, group_id)
+            if isinstance(group_identifier, int):
+                _get_user_muted_case(message, group_id=group_identifier)
+            elif isinstance(group_identifier, str) and group_identifier.startswith("@"):
+                _get_user_muted_case(message, group_username=group_identifier)
+            else:
+                _get_user_muted_case(message, group_title=group_identifier)
+
+        @function_tool
+        def mark_user_muted_case_as_solved():
+            return _mark_user_muted_case_as_solved(message)
 
         @function_tool
         def mute_user(
