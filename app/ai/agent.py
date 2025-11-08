@@ -77,10 +77,15 @@ class AIAgent:
             api_key=AI_API_KEY,
         )
 
-    def star_chatter(self, mcp_server: list, functions: list = []):
+    def star_chatter(
+        self,
+        mcp_server: list,
+        message: types.Message,
+        functions: list = [],
+    ):
         return Agent(
             "StarChatter",
-            instructions=f"You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. Remember to use tools if required.",
+            instructions=f"You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. Remember to use tools if required. \nuser_message_id: {message.id}\nassistant_message_id: list of [user_message_id + (1 per 4000 characters)]",
             tools=functions,
             model=self.litellm_model,
             mcp_servers=mcp_server,
@@ -175,6 +180,15 @@ class AIAgent:
 
         @function_tool
         def delete_message(message_id: int | None = None):
+            """Delete message with id if provided, otherwise delete the message that triggered the command.
+
+            Args:
+                message_id (int | None, optional): Message ID to delete. Defaults to None and deletes the message that triggered the command.
+
+            Returns:
+                str: Success message
+
+            """
             loop = asyncio.get_event_loop()
             if message_id:
                 asyncio.run_coroutine_threadsafe(
@@ -189,9 +203,14 @@ class AIAgent:
             params={"url": "https://nymbo-tools.hf.space/gradio_api/mcp/sse"},
             cache_tools_list=True,
         ) as mcp_server:
+            text = (
+                detected
+                or (message.text or message.caption or "") + f"\n[{message.id}]"
+            )
             res = await Runner.run(
                 self.star_chatter(
                     mcp_server=[mcp_server],
+                    message=message,
                     functions=[
                         get_user_muted_case,
                         mute_user,
@@ -204,7 +223,7 @@ class AIAgent:
                         set_violation_rules,
                     ],
                 ),
-                detected or message.text,
+                text,
                 session=session,
             )
             return res.final_output
