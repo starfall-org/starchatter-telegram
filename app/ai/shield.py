@@ -86,6 +86,6 @@ async def detector(
                         + f"USER FULL NAME: {user}\n"
                         + f"USER ID: {user_id}\n\n"
                         + f"DETAILS: {response.message.content}\n\n"
-                        + f"VIOLATION CONTENT: {text}\n\n"
-                        + "REQUEST: You will delete the message and mute the user. Please do not respond to this message, you will send a report message in their language and English instead."
+                        + f"VIOLATION MESSAGE: {text}\n\n"
+                        + "REQUEST: You will verify the system report to confirm if it is a violation. If it is a violation, you will delete the message and mute the user, otherwise you will do nothing and reply user's message normally. You will send a report message in their language and English instead."
                     )
