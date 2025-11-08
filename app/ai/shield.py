@@ -82,10 +82,10 @@ async def detector(
                     )
 
                     return (
-                        f"❌Violation detected in __**[{user}](tg://user?id={user_id})**__'s message.\n\n"
-                        + f"USER FULL NAME: {user}\n"
-                        + f"USER ID: {user_id}\n\n"
-                        + f"SYSTEM REPORT: {response.message.content}\n\n"
-                        + f"MESSAGE: {text}\n\n"
-                        + "REQUEST: You will verify the system report to confirm if it is a violation. If it is a violation, you will delete the message and mute the user, otherwise you will do nothing and reply user's message normally and do not include the system report. In case of a violation, if user's message is not English, you will send 2 versions of the message in English and that language as well."
+                        "__(\nSYSTEM REPORT: ❌Violation detected\n"
+                        + f"**User Fullname:** {user}\n"
+                        + f"**User ID:** {user_id}\n\n"
+                        + f"**Message:** {response.message.content}\n"
+                        + "**Notice:** Please verify the message if it is a violation case. If it is a violation, you will delete the message and mute the user, if user's message is not English, you will send 2 versions of the message in English and that language as well. If you think this is a mistake, just ignore this report.\n)__\n\n"
+                        + text
                     )

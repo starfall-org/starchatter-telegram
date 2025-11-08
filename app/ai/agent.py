@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime, timedelta
-
+import os
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
 from ai.base import get_model, list_models, set_model
@@ -53,6 +53,21 @@ def _get_user_muted_case(
         return "This case not found in database."
 
 
+@function_tool
+def get_violation_rules():
+    preset = os.environ.get(
+        "PRESET_VIOLATION_RULES",
+        "No violation rules found. Use default rules: 'spam, unsafe advertisement'.",
+    )
+    return preset
+
+
+@function_tool
+def set_violation_rules(rules: str):
+    os.environ["PRESET_VIOLATION_RULES"] = rules
+    return "Violation rules set."
+
+
 class AIAgent:
     def __init__(self):
         self.model_id = get_model()
@@ -63,8 +78,6 @@ class AIAgent:
         )
 
     def star_chatter(self, mcp_server: list, functions: list = []):
-        functions.append(list_models)
-        functions.append(set_model)
         return Agent(
             "StarChatter",
             instructions=f"You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. Remember to use tools if required.",
@@ -107,7 +120,6 @@ class AIAgent:
 
         @function_tool
         def mute_user(
-            group_id: int,
             user_id: int,
             reason: str,
             duration_seconds: int = 0,
@@ -126,8 +138,7 @@ class AIAgent:
             text = message.text or message.caption or ""
             loop = asyncio.get_event_loop()
             asyncio.run_coroutine_threadsafe(
-                client.restrict_chat_member(
-                    group_id,
+                message.chat.restrict_member(
                     user_id,
                     permissions=types.ChatPermissions(
                         all_perms=False,
@@ -163,9 +174,14 @@ class AIAgent:
             return "Action completed."
 
         @function_tool
-        def delete_message(message_id: int):
+        def delete_message(message_id: int | None = None):
             loop = asyncio.get_event_loop()
-            asyncio.run_coroutine_threadsafe(message.delete(), loop)
+            if message_id:
+                asyncio.run_coroutine_threadsafe(
+                    client.delete_messages(message.chat.id, [message_id]), loop
+                )
+            else:
+                asyncio.run_coroutine_threadsafe(message.delete(), loop)
             return "Action completed."
 
         async with mcp.MCPServerSse(
@@ -182,6 +198,10 @@ class AIAgent:
                         unmute_user,
                         delete_message,
                         clear_your_memory,
+                        list_models,
+                        set_model,
+                        get_violation_rules,
+                        set_violation_rules,
                     ],
                 ),
                 detected or message.text,
