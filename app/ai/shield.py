@@ -66,23 +66,25 @@ async def detector(
                 args = call.function.arguments
                 if inspect.iscoroutinefunction(func):
                     tool_response = await func(**args)
-                    messages.append(
-                        {
-                            "role": "tool",
-                            "tool_name": call.function.name,
-                            "content": str(tool_response),
-                        }
-                    )
-                    response = await client.chat(
-                        model=AI_MODEL,
-                        messages=messages,
-                    )
+                else:
+                    tool_response = func(**args)
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_name": call.function.name,
+                        "content": str(tool_response),
+                    }
+                )
+                response = await client.chat(
+                    model=AI_MODEL,
+                    messages=messages,
+                )
 
-                    return (
-                        f"❌Violation detected in __**[{user}](tg://user?id={user_id})**__'s message.\n\n"
-                        + f"USER FULL NAME: {user}\n"
-                        + f"USER ID: {user_id}\n\n"
-                        + f"DETAILS: {response.message.content}\n\n"
-                        + f"VIOLATION CONTENT: {text}\n\n"
-                        + "REQUEST: You will delete the message and mute the user. Please do not respond to this message, you will send a report message in their language and English instead."
-                    )
+                return (
+                    f"❌Violation detected in __**[{user}](tg://user?id={user_id})**__'s message.\n\n"
+                    + f"USER FULL NAME: {user}\n"
+                    + f"USER ID: {user_id}\n\n"
+                    + f"DETAILS: {response.message.content}\n\n"
+                    + f"VIOLATION CONTENT: {text}\n\n"
+                    + "REQUEST: You will delete the message and mute the user. Please do not respond to this message, you will send a report message in their language and English instead."
+                )
