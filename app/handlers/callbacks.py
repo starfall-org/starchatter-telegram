@@ -84,6 +84,5 @@ async def select_model_handler(client: Client, callback_query: types.CallbackQue
     model_id = str(callback_query.data).split("/")[1]
     os.environ["AGENT_MODEL"] = model_id
     await callback_query.answer(f"Selected model: `{model_id}`", show_alert=True)
-    await callback_query.message.edit_text(f"Model `{model_id}` selected.")
-    await asyncio.sleep(5)
     await callback_query.message.delete()
+    await callback_query.message.reply_to_message.delete()

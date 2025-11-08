@@ -166,4 +166,6 @@ async def models_handler(client: Client, message: types.Message):
             for model in all_models
         ]
     )
-    await message.reply(f"Current model: `{current_model}`", reply_markup=markup)
+    await message.reply(
+        f"Current model: `{current_model}`", reply_markup=markup, quote=True
+    )
