@@ -127,9 +127,25 @@ class AIAgent:
         message: types.Message,
         functions: list = [],
     ):
+        full_name = (
+            (
+                f"{message.sender_chat.title} (Group/Anonymous Admin)"
+                if message.sender_chat.title == message.chat.title
+                else f"{message.sender_chat.title} (Channel/Anonymous User)"
+            )
+            if message.sender_chat
+            else message.from_user.full_name
+        )
+        user_id = (
+            message.sender_chat.id if message.sender_chat else message.from_user.id
+        )
         return Agent(
             "StarChatter",
-            instructions=f"You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. \n\nuser_id: {message.from_user.id} \nuser_message_id: {message.id} \nassistant_message_id: [user_message_id + i (i += 1 for each 4000 characters)] \nprevios_message_id: user_message_id - i (i = user_message_id - len(messages_until_target))",
+            instructions=f"""You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. To mention a user, use `[user_fullname](tg://user?id=[user_id]). 
+            - user_fullname: {full_name}
+            - user_id: {user_id}
+            - user_message_id: {message.id}
+            - assistant_message_ids (Your response): [user_message_id + i (i += 1 for each 4000 characters)] \nprevios_message_id: user_message_id - i (i = user_message_id - len(messages_until_target))""",
             tools=functions,
             model=self.litellm_model,
             mcp_servers=mcp_server,

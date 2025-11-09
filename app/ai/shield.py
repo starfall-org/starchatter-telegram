@@ -100,6 +100,6 @@ async def detector(
                         + f"**User Fullname:** {user}\n"
                         + f"**User ID:** {user_id}\n\n"
                         + f"**System Response:** {response.message.content}\n"
-                        + "**Notice:** Please verify the user's message. If you think this is a violation, you will delete the message and mute the user and send a report. If the user's message is not English, you will send 2 versions of the report, one in English and one in that language. \nIf you think this is a mistake, just ignore this warning.\n)__\n\n"
+                        + "**Notice:** Please verify the user's message. If you think this is a violation, you will delete the message and mute the user and send a report. If the user's message is not English, you will send 2 versions of the report (remember to mention the user), one in English and one in that language. \nIf you think this is a mistake, just ignore this warning.\n)__\n\n"
                         + text
                     )
