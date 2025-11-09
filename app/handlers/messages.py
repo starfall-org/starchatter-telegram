@@ -7,6 +7,23 @@ from pyrogram import Client, enums, filters, types
 db = Database()
 
 
+@Client.on_message(filters.new_chat_members)  # type: ignore
+async def welcome_handler(client: Client, message: types.Message):
+    await message.reply_chat_action(enums.ChatAction.TYPING)
+    agent = AIAgent()
+    joiners = message.new_chat_members
+    for joiner in joiners:
+        if joiner.is_self:
+            prompt = f"__(SYSTEM: You has been added to the group **{message.chat.title}**)__"
+        elif message.from_user.is_bot:
+            prompt = f"__(SYSTEM: A new bot **{message.from_user.full_name}** has been added to the group **{message.chat.title}**)__"
+        else:
+            prompt = f"__(SYSTEM: A new user **{message.from_user.full_name}** has joined the group **{message.chat.title}**)__"
+
+        resp = await agent.run_chat(client, message, prompt)
+        await message.reply(resp, quote=True, parse_mode=enums.ParseMode.MARKDOWN)
+
+
 @Client.on_message(
     filters.incoming & filters.group,  # type: ignore
 )

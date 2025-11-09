@@ -136,7 +136,7 @@ class AIAgent:
         )
 
     async def run_chat(
-        self, client: Client, message: types.Message, detected: str | None = None
+        self, client: Client, message: types.Message, prompt: str | None = None
     ):
         chat_id = message.chat.id
         session = SQLiteSession(f"chat_{chat_id}", "conversations.sqlite")
@@ -253,8 +253,7 @@ class AIAgent:
             cache_tools_list=True,
         ) as mcp_server:
             text = (
-                detected
-                or (message.text or message.caption or "") + f"\n[{message.id}]"
+                prompt or (message.text or message.caption or "") + f"\n[{message.id}]"
             )
             res = await Runner.run(
                 self.star_chatter(
