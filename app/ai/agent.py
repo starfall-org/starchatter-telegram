@@ -1,115 +1,13 @@
 import asyncio
 from datetime import datetime, timedelta
-import os
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
 from ai.base import get_model, list_models, set_model
 from config import AI_API_KEY, AI_BASE_URL
 from database.client import Database
-from database.models import MutedCase
 from pyrogram import Client, types
-from sqlalchemy import select
 
 db = Database()
-
-
-def _get_user_muted_case(
-    message: types.Message,
-    group_title: str | None = None,
-    group_username: str | None = None,
-    group_id: int | None = None,
-) -> str | None:
-    session = db._get_session()
-    if session:
-        if group_title and not group_username and not group_id:
-            query = select(MutedCase)
-            results = session.execute(query).scalars().all()
-            for item in results:
-                if (
-                    group_title.lower() in item.group_title.lower()
-                    and item.user_id == message.from_user.id
-                ):
-                    muted_case = item
-                    break
-                else:
-                    muted_case = None
-        elif group_username or group_id:
-            if group_id:
-                query = select(MutedCase).where(
-                    MutedCase.group_id == group_id,
-                    MutedCase.user_id == message.from_user.id,
-                )
-            if group_username and not group_id:
-                query = select(MutedCase).where(
-                    MutedCase.group_username == group_username,
-                    MutedCase.user_id == message.from_user.id,
-                )
-
-            result = session.execute(query)
-            muted_case = result.scalars().first()
-        else:
-            return "Please provide group title, group username or group id."
-        if muted_case and isinstance(muted_case, MutedCase):
-            return str(muted_case)
-        return "This case not found in database."
-
-
-def _mark_user_muted_case_as_solved(
-    message: types.Message,
-    group_id: int | None = None,
-    group_username: str | None = None,
-    group_title: str | None = None,
-):
-    session = db._get_session()
-    if session:
-        if group_title and not group_username and not group_id:
-            query = select(MutedCase)
-            results = session.execute(query).scalars().all()
-            for item in results:
-                if (
-                    group_title.lower() in item.group_title.lower()
-                    and item.user_id == message.from_user.id
-                ):
-                    muted_case = item
-                    break
-                else:
-                    muted_case = None
-        elif group_username or group_id:
-            if group_id:
-                query = select(MutedCase).where(
-                    MutedCase.group_id == group_id,
-                    MutedCase.user_id == message.from_user.id,
-                )
-            if group_username and not group_id:
-                query = select(MutedCase).where(
-                    MutedCase.group_username == group_username,
-                    MutedCase.user_id == message.from_user.id,
-                )
-
-            result = session.execute(query)
-            muted_case = result.scalars().first()
-        else:
-            return "Please provide group title, group username or group id."
-        if muted_case and isinstance(muted_case, MutedCase):
-            session.delete(muted_case)
-            session.commit()
-            return "This case marked as solved."
-        return "This case not found in database."
-
-
-@function_tool
-def get_violation_rules():
-    preset = os.environ.get(
-        "PRESET_VIOLATION_RULES",
-        "No violation rules found. Use default rules: 'spam, unsafe advertisement'.",
-    )
-    return preset
-
-
-@function_tool
-def set_violation_rules(rules: str):
-    os.environ["PRESET_VIOLATION_RULES"] = rules
-    return "Violation rules set."
 
 
 class AIAgent:
@@ -144,8 +42,8 @@ class AIAgent:
             instructions=f"""You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. To mention a user, use `[user_fullname](tg://user?id=[user_id]). 
             - user_fullname: {full_name}
             - user_id: {user_id}
-            - user_message_id: {message.id}
-            - assistant_message_ids (Your response): [user_message_id + i (i += 1 for each 4000 characters)] \nprevios_message_id: user_message_id - i (i = user_message_id - len(messages_until_target))""",
+            - message_id: {message.id}
+            - previos_message_id: user_message_id - i (i = user_message_id - len(messages_until_target))""",
             tools=functions,
             model=self.litellm_model,
             mcp_servers=mcp_server,
@@ -164,34 +62,8 @@ class AIAgent:
             return "History cleared."
 
         @function_tool
-        def get_user_muted_case(
-            group_identifier: str | int | None = None,
-        ):
-            """
-            Check if the user is currently muted in the chat. If muted, return json object of the muted case.
-
-            Args:
-                group_identifier (str | int | None): Group identifier. Can be group title, group username, or group id.
-
-            Returns:
-                str: Python object of the muted case or a message indicating no mute found.
-
-            """
-            if isinstance(group_identifier, int):
-                _get_user_muted_case(message, group_id=group_identifier)
-            elif isinstance(group_identifier, str) and group_identifier.startswith("@"):
-                _get_user_muted_case(message, group_username=group_identifier)
-            else:
-                _get_user_muted_case(message, group_title=group_identifier)
-
-        @function_tool
-        def mark_user_muted_case_as_solved():
-            return _mark_user_muted_case_as_solved(message)
-
-        @function_tool
         def mute_user(
             user_id: int,
-            reason: str,
             duration_seconds: int = 0,
         ):
             """
@@ -205,7 +77,6 @@ class AIAgent:
             Returns:
                 str: Success message or error message if muting fails.
             """
-            text = message.text or message.caption or ""
             loop = asyncio.get_event_loop()
             asyncio.run_coroutine_threadsafe(
                 message.chat.restrict_member(
@@ -217,15 +88,6 @@ class AIAgent:
                 ),
                 loop,
             )
-            punished_case = MutedCase(
-                user_id=message.from_user.id,
-                group_id=message.chat.id,
-                group_title=message.chat.title,
-                group_username=message.chat.username,
-                reason=reason,
-                content=text,
-            )
-            asyncio.run_coroutine_threadsafe(db.add(punished_case), loop)
             return "Action completed."
 
         @function_tool
@@ -276,15 +138,12 @@ class AIAgent:
                     mcp_server=[mcp_server],
                     message=message,
                     functions=[
-                        get_user_muted_case,
                         mute_user,
                         unmute_user,
                         delete_message,
                         clear_your_memory,
                         list_models,
                         set_model,
-                        get_violation_rules,
-                        set_violation_rules,
                     ],
                 ),
                 text,

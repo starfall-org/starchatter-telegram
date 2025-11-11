@@ -1,4 +1,4 @@
-from sqlalchemy import Boolean, ForeignKey, String, BigInteger
+from sqlalchemy import Boolean, ForeignKey, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -96,15 +96,3 @@ class TelegramChannel(Base):
     users: Mapped[list["TelegramUser"]] = relationship(
         secondary="channel_members", viewonly=True
     )
-
-
-class MutedCase(Base):
-    __tablename__ = "muted_cases"
-
-    id: Mapped[int] = mapped_column(primary_key=True, unique=True)
-    user_id: Mapped[int] = mapped_column(BigInteger)
-    group_id: Mapped[int] = mapped_column(BigInteger)
-    group_title: Mapped[str] = mapped_column(String(255))
-    group_username: Mapped[str] = mapped_column(String(32), nullable=True)
-    reason: Mapped[str] = mapped_column(String(1000))
-    content: Mapped[str] = mapped_column(String(4000))
