@@ -15,11 +15,7 @@ def get_model() -> str:
     if selected_model:
         return selected_model
     else:
-        all_models = models()
-        for model in all_models:
-            os.environ["AGENT_MODEL"] = model.id
-            return model.id
-        return "gpt-3.5-turbo"
+        return "solar-pro2"
 
 
 @function_tool
