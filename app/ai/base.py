@@ -5,7 +5,7 @@ from config import UPSTAGE_API, UPSTAGE_URL, A21_API, A21_URL
 from openai import OpenAI
 
 
-def update_models():
+def upstage_models():
     c = OpenAI(base_url=UPSTAGE_URL, api_key=UPSTAGE_API)
     models = c.models.list()
     return [*models]
@@ -18,7 +18,7 @@ def a21_models():
 
 
 def models():
-    u_models = update_models()
+    u_models = upstage_models()
     a_models = a21_models()
     return [*u_models, *a_models]
 

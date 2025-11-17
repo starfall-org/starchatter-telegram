@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timedelta
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
-from ai.base import get_model, list_models, set_model, update_models
+from ai.base import get_model, list_models, set_model, upstage_models
 from config import UPSTAGE_API, UPSTAGE_URL, A21_API, A21_URL
 from database.client import Database
 from pyrogram import Client, types
@@ -23,7 +23,7 @@ class AIAgent:
             base_url=A21_URL,
             api_key=A21_API,
         )
-        if self.model_id in update_models():
+        if self.model_id in [m.id for m in upstage_models()]:
             self.litellm_model = upstage_model
         else:
             self.litellm_model = a21_model
