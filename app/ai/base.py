@@ -1,13 +1,26 @@
 import os
 
 from agents import function_tool
-from config import AI_API_KEY, AI_BASE_URL
+from config import UPSTAGE_API, UPSTAGE_URL, A21_API, A21_URL
 from openai import OpenAI
 
 
+def update_models():
+    c = OpenAI(base_url=UPSTAGE_URL, api_key=UPSTAGE_API)
+    models = c.models.list()
+    return [*models]
+
+
+def a21_models():
+    a21 = OpenAI(base_url=A21_URL, api_key=A21_API)
+    models = a21.models.list()
+    return [*models]
+
+
 def models():
-    client = OpenAI(base_url=AI_BASE_URL, api_key=AI_API_KEY)
-    return client.models.list()
+    u_models = update_models()
+    a_models = a21_models()
+    return [*u_models, *a_models]
 
 
 def get_model() -> str:
@@ -20,7 +33,7 @@ def get_model() -> str:
 
 @function_tool
 def list_models():
-    return models().model_dump_json()
+    return models()
 
 
 @function_tool

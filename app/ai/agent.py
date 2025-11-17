@@ -2,8 +2,8 @@ import asyncio
 from datetime import datetime, timedelta
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
-from ai.base import get_model, list_models, set_model
-from config import AI_API_KEY, AI_BASE_URL
+from ai.base import get_model, list_models, set_model, update_models
+from config import UPSTAGE_API, UPSTAGE_URL, A21_API, A21_URL
 from database.client import Database
 from pyrogram import Client, types
 
@@ -13,11 +13,20 @@ db = Database()
 class AIAgent:
     def __init__(self):
         self.model_id = get_model()
-        self.litellm_model = LitellmModel(
+        upstage_model = LitellmModel(
             model="openai/" + self.model_id,
-            base_url=AI_BASE_URL,
-            api_key=AI_API_KEY,
+            base_url=UPSTAGE_URL,
+            api_key=UPSTAGE_API,
         )
+        a21_model = LitellmModel(
+            model="openai/" + self.model_id,
+            base_url=A21_URL,
+            api_key=A21_API,
+        )
+        if self.model_id in update_models():
+            self.litellm_model = upstage_model
+        else:
+            self.litellm_model = a21_model
 
     def star_chatter(
         self,

@@ -3,7 +3,7 @@ openai-agents
 openai-agents[litellm]
 ollama
 sqlalchemy-libsql
-TgCrypto==1.2.5
+TgCrypto-pyrofork
 pyrofork
 flask
 uvloop
