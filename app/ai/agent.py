@@ -52,7 +52,7 @@ class AIAgent:
         )
         return Agent(
             "StarChatter",
-            instructions=f"""You are **StarChatter**. You are powered by model `{self.model_id}`. To mention a user, use `[user_fullname](tg://user?id=[user_id]). 
+            instructions=f"""You are **StarChatter**. You are powered by model `{self.model_id}`. Change model if you can't help the user. To mention a user, use `[user_fullname](tg://user?id=[user_id]). 
             - user_fullname: {full_name}
             - user_id: {user_id}
             - message_id: {message.id}

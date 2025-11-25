@@ -34,7 +34,7 @@ def get_model() -> str:
     if selected_model:
         return selected_model
     else:
-        return "gpt-fast"
+        return "solar-pro2"
 
 
 @function_tool
