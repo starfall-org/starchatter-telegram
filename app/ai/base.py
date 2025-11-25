@@ -16,11 +16,17 @@ def a21_models():
     models = a21.models.list()
     return [*models]
 
+def anondrop_models():
+    anondrop = OpenAI(base_url="https://anondrop.net/v1", api_key="*")
+    models = anondrop.models.list()
+    return [*models]
+
 
 def models():
     u_models = upstage_models()
     a_models = a21_models()
-    return [*u_models, *a_models]
+    ad_models = anondrop_models()
+    return [*u_models, *a_models, *ad_models]
 
 
 def get_model() -> str:
@@ -28,7 +34,7 @@ def get_model() -> str:
     if selected_model:
         return selected_model
     else:
-        return "solar-pro2"
+        return "claude"
 
 
 @function_tool

@@ -2,7 +2,7 @@ import asyncio
 from datetime import datetime, timedelta
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
-from ai.base import get_model, list_models, set_model, upstage_models
+from ai.base import get_model, list_models, set_model, upstage_models, anondrop_models
 from config import UPSTAGE_API, UPSTAGE_URL, A21_API, A21_URL
 from database.client import Database
 from pyrogram import Client, types
@@ -13,20 +13,24 @@ db = Database()
 class AIAgent:
     def __init__(self):
         self.model_id = get_model()
-        upstage_model = LitellmModel(
+        if self.model_id in [m.id for m in upstage_models()]:
+            self.litellm_model = LitellmModel(
             model="openai/" + self.model_id,
             base_url=UPSTAGE_URL,
             api_key=UPSTAGE_API,
         )
-        a21_model = LitellmModel(
+        elif self.model_id in [m.id for m in anondrop_models()]:
+            self.litellm_model = LitellmModel(
+            model="openai/" + self.model_id,
+            base_url="https://anondrop.net/v1",
+            api_key="*",
+        )
+        else:
+            self.litellm_model =LitellmModel(
             model="openai/" + self.model_id,
             base_url=A21_URL,
             api_key=A21_API,
         )
-        if self.model_id in [m.id for m in upstage_models()]:
-            self.litellm_model = upstage_model
-        else:
-            self.litellm_model = a21_model
 
     def star_chatter(
         self,
@@ -48,11 +52,11 @@ class AIAgent:
         )
         return Agent(
             "StarChatter",
-            instructions=f"""You are **StarChatter**. You are powered by model `{self.model_id}`. You can do everything. To mention a user, use `[user_fullname](tg://user?id=[user_id]). 
+            instructions=f"""You are **StarChatter**. You are powered by model `{self.model_id}`. To mention a user, use `[user_fullname](tg://user?id=[user_id]). 
             - user_fullname: {full_name}
             - user_id: {user_id}
             - message_id: {message.id}
-            - previos_message_id: user_message_id - i (i = user_message_id - len(messages_until_target))""",
+            - previous_message_id: user_message_id - i (i = user_message_id - len(messages_until_target))""",
             tools=functions,
             model=self.litellm_model,
             mcp_servers=mcp_server,
