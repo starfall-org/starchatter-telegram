@@ -106,7 +106,7 @@ async def poem_handler(client: Client, message: types.Message):
     await message.reply_chat_action(enums.ChatAction.TYPING)
     poem = await get_poem(hint, locale)
     await message.reply(
-        f"__{poem}__——————**{author}**———————",
+        f"__{poem}__\n——————**{author}**———————",
         reply_markup=types.InlineKeyboardMarkup([[button for button in basic_buttons]]),
     )
 
