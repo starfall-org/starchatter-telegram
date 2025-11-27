@@ -1,5 +1,6 @@
 from aiohttp import ClientSession
 from langdetect import detect
+import re
 
 
 async def get_poem(hint: str, locale: str | None = None):
@@ -16,8 +17,13 @@ async def get_poem(hint: str, locale: str | None = None):
             poem: str = resp["result"]
             poem = poem.split("\n", 2)[-1]
 
-            if hint in poem:
-                poem = poem.replace(hint, f"**{hint}**")
+            if re.search(re.escape(hint), poem, re.IGNORECASE):
+                poem = re.sub(
+                    re.escape(hint),
+                    lambda m: f"**{m.group(0)}**",
+                    poem,
+                    flags=re.IGNORECASE,
+                )
 
             return poem
 
