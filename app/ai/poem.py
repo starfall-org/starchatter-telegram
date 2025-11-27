@@ -12,7 +12,14 @@ async def get_poem(hint: str, locale: str | None = None):
         async with s.get(
             "https://typegpt.io/api/openAI", json={"input": hint, "locale": locale}
         ) as r:
-            return await r.json()
+            resp = await r.json()
+            poem: str = resp["result"]
+            poem = poem.split("\n", 2)[-1]
+
+            if hint in poem:
+                poem = poem.replace(hint, f"**{hint}**")
+
+            return poem
 
 
 """

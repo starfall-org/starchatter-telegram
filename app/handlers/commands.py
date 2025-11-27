@@ -98,20 +98,17 @@ async def group_menu(client: Client, message: types.Message):
     await message.reply("Group Admin Menu:", reply_markup=keyboard_markup)
 
 
-@Client.on_message(filters.command(["poem", "tho"]))  # type: ignore
+@Client.on_message(filters.command("poem"))  # type: ignore
 async def poem_handler(client: Client, message: types.Message):
     locale = None
-    if message.command[0] == "/tho":
-        locale = "vi"
     author = message.from_user.full_name
     hint = message.text.split(" ", 1)[1]
     await message.reply_chat_action(enums.ChatAction.TYPING)
     poem = await get_poem(hint, locale)
     await message.reply(
-        f"```\n{poem['result']}\n```——————__**{author}**__———————",
+        f"__{poem}__——————**{author}**———————",
         reply_markup=types.InlineKeyboardMarkup([[button for button in basic_buttons]]),
     )
-    await message.delete()
 
 
 @Client.on_message(filters.command("image"))  # type: ignore
