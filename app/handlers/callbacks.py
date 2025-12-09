@@ -1,7 +1,7 @@
 import asyncio
 import os
 
-from ai.base import models
+from config import OWNER_ID
 from database.client import Database
 from database.models import (
     TelegramGroup,
@@ -10,7 +10,6 @@ from database.models import (
 from pyrogram import Client, enums, filters, types
 from sqlalchemy import select
 from utils import is_chat_admin, is_chat_owner, is_owner
-from config import OWNER_ID
 
 db = Database()
 

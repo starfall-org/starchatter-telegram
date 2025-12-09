@@ -1,32 +1,18 @@
 import os
 
 from agents import function_tool
-from config import UPSTAGE_API, UPSTAGE_URL, A21_API, A21_URL
+from config import OAI_COMP_API, OAI_COMP_URL
 from openai import OpenAI
 
 
-def upstage_models():
-    c = OpenAI(base_url=UPSTAGE_URL, api_key=UPSTAGE_API)
-    models = c.models.list()
-    return [*models]
-
-
-def a21_models():
-    a21 = OpenAI(base_url=A21_URL, api_key=A21_API)
-    models = a21.models.list()
-    return [*models]
-
-def anondrop_models():
-    anondrop = OpenAI(base_url="https://anondrop.net/v1", api_key="*")
-    models = anondrop.models.list()
-    return [*models]
-
-
 def models():
-    u_models = upstage_models()
-    a_models = a21_models()
-    ad_models = anondrop_models()
-    return [*u_models, *a_models, *ad_models]
+    client = OpenAI(
+        base_url=OAI_COMP_URL,
+        api_key=OAI_COMP_API,
+    )
+
+    models = client.models.list()
+    return [m.id for m in models.data]
 
 
 def get_model() -> str:
@@ -34,7 +20,7 @@ def get_model() -> str:
     if selected_model:
         return selected_model
     else:
-        return "solar-pro2"
+        return "lucid-v1-medium/assistant"
 
 
 @function_tool

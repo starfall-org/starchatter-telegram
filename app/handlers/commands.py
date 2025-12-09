@@ -156,8 +156,8 @@ async def models_handler(client: Client, message: types.Message):
         [
             [
                 types.InlineKeyboardButton(
-                    text=model.id,
-                    callback_data=f"openai/{model.id}",
+                    text=model,
+                    callback_data=f"openai/{model}",
                 )
             ]
             for model in all_models

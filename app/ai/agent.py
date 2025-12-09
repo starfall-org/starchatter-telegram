@@ -2,8 +2,8 @@ import asyncio
 from datetime import datetime, timedelta
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
-from ai.base import get_model, list_models, set_model, upstage_models, anondrop_models
-from config import UPSTAGE_API, UPSTAGE_URL, A21_API, A21_URL
+from ai.base import get_model, list_models, set_model
+from config import OAI_COMP_API, OAI_COMP_URL
 from database.client import Database
 from pyrogram import Client, types
 
@@ -13,23 +13,10 @@ db = Database()
 class AIAgent:
     def __init__(self):
         self.model_id = get_model()
-        if self.model_id in [m.id for m in upstage_models()]:
-            self.litellm_model = LitellmModel(
+        self.litellm_model = LitellmModel(
             model="openai/" + self.model_id,
-            base_url=UPSTAGE_URL,
-            api_key=UPSTAGE_API,
-        )
-        elif self.model_id in [m.id for m in anondrop_models()]:
-            self.litellm_model = LitellmModel(
-            model="openai/" + self.model_id,
-            base_url="https://anondrop.net/v1",
-            api_key="*",
-        )
-        else:
-            self.litellm_model =LitellmModel(
-            model="openai/" + self.model_id,
-            base_url=A21_URL,
-            api_key=A21_API,
+            base_url=OAI_COMP_URL,
+            api_key=OAI_COMP_API,
         )
 
     def star_chatter(
@@ -52,7 +39,7 @@ class AIAgent:
         )
         return Agent(
             "StarChatter",
-            instructions=f"""You are **StarChatter**. You are powered by model `{self.model_id}`. Change model if you can't help the user. To mention a user, use `[user_fullname](tg://user?id=[user_id]). 
+            instructions=f"""You are **StarChatter**. You are powered by model `{self.model_id}`. Change model if you can't help the user. To mention a user, use `[user_fullname](tg://user?id=[user_id]).
             - user_fullname: {full_name}
             - user_id: {user_id}
             - message_id: {message.id}
