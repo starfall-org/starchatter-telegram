@@ -2,22 +2,53 @@ import asyncio
 from datetime import datetime, timedelta
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
-from ai.base import get_model, list_models, set_model
-from config import OAI_COMP_API, OAI_COMP_URL
-from database.client import Database
-from pyrogram import Client, types
+from ai.base import list_models, set_model
+from database.local import local_db
+from database.models import AIProvider
+from openai import AsyncClient
 
-db = Database()
+
+async def get_default_provider_and_model():
+    """Lấy provider và model mặc định cho chat từ local database"""
+    default_model = await local_db.get_default_model("chat")
+    provider = await local_db.get_default_provider()
+    
+    model_id = ""
+    if default_model and default_model.model:
+        model_id = default_model.model
+    
+    if default_model and default_model.provider_name:
+        provider = await local_db.get_provider_by_name(default_model.provider_name)
+    
+    return provider, model_id
 
 
 class AIAgent:
     def __init__(self):
-        self.model_id = get_model()
-        self.litellm_model = LitellmModel(
-            model="openai/" + self.model_id,
-            base_url=OAI_COMP_URL,
-            api_key=OAI_COMP_API,
-        )
+        # Lấy provider và model mặc định cho chat
+        import asyncio
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        provider, model_id = loop.run_until_complete(get_default_provider_and_model())
+        
+        # Nếu không có model được đặt, lấy model đầu tiên từ provider
+        if not model_id and provider:
+            models_list = loop.run_until_complete(list_models())
+            if models_list:
+                model_id = models_list[0]
+        
+        if provider and model_id:
+            self.litellm_model = LitellmModel(
+                model="openai/" + model_id,
+                base_url=provider.base_url,
+                api_key=provider.api_key,
+            )
+        else:
+            raise ValueError("No AI provider configured. Use /add_provider to add one.")
 
     def star_chatter(
         self,
@@ -110,7 +141,7 @@ class AIAgent:
             """Delete message with id if provided, otherwise delete the message that triggered the command.
 
             Args:
-                message_ids (int | list[int] | None, optional): Message ID or list of message IDs to delete. Defaults to None and deletes the message that triggered the command.
+                message_ids (int | list[int], optional): Message ID or list of message IDs to delete. Defaults to None and deletes the message that triggered the command.
 
             Returns:
                 str: Success message

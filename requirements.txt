@@ -34,7 +34,6 @@ jiter==0.12.0
 jsonschema==4.25.1
 jsonschema-specifications==2025.9.1
 langdetect==1.0.9
-libsql-experimental==0.0.55
 litellm==1.80.5
 MarkupSafe==3.0.3
 mcp==1.22.0

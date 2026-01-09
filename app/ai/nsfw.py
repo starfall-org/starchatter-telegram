@@ -1,17 +1,13 @@
-from config import AI_MODEL, OLLAMA_URL
+from ai.base import get_client
 from gradio_client import Client
 from langdetect import detect
-from ollama import AsyncClient
 from PIL import Image
-
-client = AsyncClient(
-    host=OLLAMA_URL,
-)
 
 
 async def translate(text: str):
+    client = get_client()
     result = await client.chat(
-        model=AI_MODEL,
+        model="lucid-v1-medium/assistant",
         messages=[
             {
                 "role": "system",
@@ -33,7 +29,7 @@ async def translate(text: str):
     return result.message.content
 
 
-async def gen_img(
+async def gen_img( 
     prompt,
     negative_prompt="nsfw, (low quality, worst quality:1.2), very displeasing, 3d, watermark, signature, ugly, poorly drawn",
 ):
