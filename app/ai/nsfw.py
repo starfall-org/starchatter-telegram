@@ -1,13 +1,19 @@
-from app.ai.base import get_client
 from gradio_client import Client
 from langdetect import detect
 from PIL import Image
 
+from app.ai.base import get_client
+from app.database.local import local_db
+
 
 async def translate(text: str):
     client = get_client()
+    try:
+        default_model = await local_db.get_default_model("translate")
+    except Exception as e:
+        default_model = await local_db.get_default_model("chat")
     result = await client.chat(
-        model="lucid-v1-medium/assistant",
+        model=default_model.model,
         messages=[
             {
                 "role": "system",
@@ -29,7 +35,7 @@ async def translate(text: str):
     return result.message.content
 
 
-async def gen_img( 
+async def gen_img(
     prompt,
     negative_prompt="nsfw, (low quality, worst quality:1.2), very displeasing, 3d, watermark, signature, ugly, poorly drawn",
 ):

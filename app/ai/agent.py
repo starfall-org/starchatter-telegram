@@ -1,13 +1,13 @@
 import asyncio
+import logging
 from datetime import datetime, timedelta
+
 from agents import Agent, Runner, SQLiteSession, function_tool, mcp
 from agents.extensions.models.litellm_model import LitellmModel
+from pyrogram import Client, types
+
 from app.ai.base import list_models, models, set_model
 from app.database.local import local_db
-from app.database.models import AIProvider
-from openai import AsyncClient
-from pyrogram import types, Client
-import logging
 
 logger = logging.getLogger(__name__)
 
@@ -31,22 +31,20 @@ async def get_default_provider_and_model():
 
 
 class AIAgent:
-    def __init__(self):
-        # Prevent direct instantiation; use AIAgent.create() instead
-        raise RuntimeError("Use AIAgent.create() instead of AIAgent()")
+    """Simplified AIAgent without complex instance management"""
     
-    def __new__(cls):
-        if not hasattr(cls, '_instance'):
-            cls._instance = super(AIAgent, cls).__new__(cls)
-            cls._instance._initialized = False
-        return cls._instance
+    def __init__(self, provider, model_id):
+        """Initialize AIAgent with provider and model"""
+        self.model_id = model_id
+        self.litellm_model = LitellmModel(
+            model="openai/" + model_id,
+            base_url=provider.base_url,
+            api_key=provider.api_key,
+        )
 
     @classmethod
     async def create(cls):
-        """Factory method to create AIAgent asynchronously"""
-        if hasattr(cls, '_instance') and cls._instance._initialized:
-            return cls._instance
-            
+        """Factory method to create AIAgent"""
         provider, model_id = await get_default_provider_and_model()
         
         # If no model is set, get first model from provider
@@ -56,20 +54,7 @@ class AIAgent:
                 model_id = models_list[0]
         
         if provider and model_id:
-            self = cls.__new__(cls)
-            self.model_id = model_id
-            self.litellm_model = LitellmModel(
-                model="openai/" + model_id,
-                base_url=provider.base_url,
-                api_key=provider.api_key,
-            )
-            self._initialized = True
-            # Initialize queue and lock for request processing
-            self._request_queue = asyncio.Queue()
-            self._processing_lock = asyncio.Lock()
-            self._is_processing = False
-            self._queue_task = None
-            return self
+            return cls(provider, model_id)
         else:
             raise ValueError("No AI provider configured. Use /add_provider to add one.")
 
@@ -105,8 +90,10 @@ class AIAgent:
             mcp_servers=mcp_server,
         )
 
-    async def _process_request_core(self, client, message, prompt):
-        """Process request core - common processing part for both run_chat and queue"""
+    async def run_chat(
+        self, client: Client, message: types.Message, prompt: str | None = None
+    ):
+        """Process chat request directly without queue management"""
         chat_id = message.chat.id
         session = SQLiteSession(f"chat_{chat_id}", "conversations.sqlite")
 
@@ -180,82 +167,32 @@ class AIAgent:
                 asyncio.run_coroutine_threadsafe(message.delete(), loop)
             return "Action completed."
 
-        async with mcp.MCPServerSse(
-            name="Tools",
-            params={"url": "https://nymbo-tools.hf.space/gradio_api/mcp/sse"},
-            cache_tools_list=True,
-        ) as mcp_server:
-            text = (
-                prompt or (message.text or message.caption or "") + f"\n[{message.id}]"
-            )
-            res = await Runner.run(
-                self.star_chatter(
-                    mcp_server=[mcp_server],
-                    message=message,
-                    functions=[
-                        mute_user,
-                        unmute_user,
-                        delete_message,
-                        clear_your_memory,
-                        list_models,
-                        set_model,
-                    ],
-                ),
-                text,
-                session=session,
-            )
-            return res.final_output
-
-    async def _process_request_from_queue(self, request_data):
-        """Process a request from queue when request fails"""
-        client, message, prompt = request_data
-        chat_id = message.chat.id
         try:
-            return await self._process_request_core(client, message, prompt)
+            async with mcp.MCPServerSse(
+                name="Tools",
+                params={"url": "https://nymbo-tools.hf.space/gradio_api/mcp/sse"},
+                cache_tools_list=True,
+            ) as mcp_server:
+                text = (
+                    prompt or (message.text or message.caption or "") + f"\n[{message.id}]"
+                )
+                res = await Runner.run(
+                    self.star_chatter(
+                        mcp_server=[mcp_server],
+                        message=message,
+                        functions=[
+                            mute_user,
+                            unmute_user,
+                            delete_message,
+                            clear_your_memory,
+                            list_models,
+                            set_model,
+                        ],
+                    ),
+                    text,
+                    session=session,
+                )
+                return res.final_output
         except Exception as e:
-            logger.error(f"Error processing request from queue for chat {chat_id}: {e}")
-            return f"Error: {str(e)}"
-
-    async def _queue_processor(self):
-        """Loop to process requests in queue when request fails"""
-        while True:
-            try:
-                # Lấy request từ queue (khối blocking)
-                request_data = await self._request_queue.get()
-                
-                # Mark as processing
-                self._is_processing = True
-
-                # Process request
-                result = await self._process_request_from_queue(request_data)
-
-                # Mark as processed
-                self._is_processing = False
-                self._request_queue.task_done()
-
-                # Return result (may need adjustment depending on usage)
-                logger.info(f"Request from queue processed successfully")
-                
-            except Exception as e:
-                logger.error(f"Error in queue processor: {e}")
-                self._is_processing = False
-                if hasattr(self, '_request_queue'):
-                    self._request_queue.task_done()
-
-    async def run_chat(
-        self, client: Client, message: types.Message, prompt: str | None = None
-    ):
-        """Process request directly, if failed then move to queue"""
-        # Check if this is the first time starting queue processor
-        if not hasattr(self, '_queue_task') or self._queue_task is None or self._queue_task.done():
-            self._queue_task = asyncio.create_task(self._queue_processor())
-        
-        try:
-            return await self._process_request_core(client, message, prompt)
-        except Exception as e:
-            chat_id = message.chat.id
-            logger.error(f"Request failed for chat {chat_id}, adding to queue: {e}")
-            # Add request to queue for reprocessing
-            request_data = (client, message, prompt)
-            await self._request_queue.put(request_data)
-            return f"Request failed, added to retry queue: {str(e)}"
+            logger.error(f"Error processing chat request for chat {chat_id}: {e}")
+            raise e
