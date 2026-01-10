@@ -1,5 +1,5 @@
-from app.handlers.admin.owner import is_user_owner
-from app.handlers.ai_provider.pagination import ITEMS_PER_PAGE, create_models_keyboard
+from app.handlers.owner import is_user_owner
+from app.handlers.pagination import ITEMS_PER_PAGE, create_models_keyboard
 from pyrogram import Client, enums, filters, types
 
 from app.ai.base import get_model

@@ -1,5 +1,5 @@
-from app.handlers.admin.owner import is_user_owner
-from app.handlers.ai_provider.pagination import (
+from app.handlers.owner import is_user_owner
+from app.handlers.pagination import (
     ITEMS_PER_PAGE,
     create_models_keyboard,
 )
@@ -90,13 +90,13 @@ async def models_number_handler(client: Client, callback_query: types.CallbackQu
 
     # Kiểm tra định dạng callback data
     if len(parts) < 2:
-        await callback_query.answer("Invalid callback data format!", show_alert=True)
+        await callback_query.answer("Internal error!", show_alert=True)
         return
 
     try:
         model_num = int(parts[1])
     except ValueError:
-        await callback_query.answer("Invalid model number!", show_alert=True)
+        await callback_query.answer("Internal error!", show_alert=True)
         return
 
     all_models = await get_models()
@@ -125,4 +125,4 @@ async def models_number_handler(client: Client, callback_query: types.CallbackQu
         # Delete the models list message
         await callback_query.message.delete()
     else:
-        await callback_query.answer("Invalid model number!", show_alert=True)
+        await callback_query.answer("Internal error!", show_alert=True)

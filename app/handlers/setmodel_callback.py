@@ -5,12 +5,12 @@ from pyrogram import Client, enums, filters, types
 from app.database.cloud import cloud_db
 from app.database.local import local_db
 from app.database.models import AIProvider
-from app.handlers.ai_provider.pagination import (
+from app.handlers.pagination import (
     ITEMS_PER_PAGE,
     create_models_keyboard,
     create_providers_keyboard,
 )
-from app.handlers.admin.owner import is_user_owner
+from app.handlers.owner import is_user_owner
 
 # Write to cloud (mirrors to local), read from local (faster)
 write_db = cloud_db

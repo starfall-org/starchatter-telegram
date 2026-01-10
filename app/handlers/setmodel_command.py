@@ -1,4 +1,4 @@
-from app.handlers.admin.owner import is_user_owner
+from app.handlers.owner import is_user_owner
 from pyrogram import Client, enums, filters, types
 
 from app.database.local import local_db as read_db

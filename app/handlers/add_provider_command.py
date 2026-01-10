@@ -1,6 +1,6 @@
 """Command handlers for AI provider and model management."""
 
-from app.handlers.admin.owner import is_user_owner
+from app.handlers.owner import is_user_owner
 from pyrogram import Client, enums, filters, types
 
 from app.database.cloud import cloud_db

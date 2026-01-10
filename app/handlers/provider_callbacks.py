@@ -1,5 +1,7 @@
 """Provider callback handler for AI provider management."""
 
+import re
+
 from pyrogram import Client, enums, filters, types
 from sqlalchemy import select
 
@@ -7,8 +9,8 @@ from app.ai.base import get_provider_models
 from app.database.cloud import cloud_db
 from app.database.local import local_db
 from app.database.models import AIProvider
-from app.handlers.admin.owner import is_user_owner
-from app.handlers.ai_provider.pagination import (
+from app.handlers.owner import is_user_owner
+from app.handlers.pagination import (
     ITEMS_PER_PAGE,
     create_models_keyboard,
     create_providers_keyboard,
@@ -20,68 +22,74 @@ read_db = local_db
 
 
 @Client.on_callback_query(
-    filters.regex(r"provider/")
+    filters.regex(r"^provider/page/\d+$")
     & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
 )
-async def provider_handler(client: Client, callback_query: types.CallbackQuery):
-    """Handle provider management callback"""
+async def provider_page_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle provider pagination callback"""
     await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
     parts = str(callback_query.data).split("/")
+    page = int(parts[2])
+    await show_providers_list(client, callback_query.message, page, force_cloud=False)
+    await callback_query.answer()
 
-    # Handle variable number of parts
-    action = parts[1] if len(parts) > 1 else ""
 
-    # Handle pagination: provider/page/{page}
-    if action == "page" and len(parts) > 2:
-        page = int(parts[2])
-        await show_providers_list(
-            client, callback_query.message, page, force_cloud=False
+@Client.on_callback_query(
+    filters.regex(r"^provider/back$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_back_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle back to providers list callback"""
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    await show_providers_list(client, callback_query.message, 0, force_cloud=False)
+    await callback_query.answer()
+
+
+@Client.on_callback_query(
+    filters.regex(r"^provider/close$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_close_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle close providers list callback"""
+    await callback_query.message.delete()
+    if callback_query.message.reply_to_message:
+        await callback_query.message.reply_to_message.delete()
+    await callback_query.answer()
+
+
+@Client.on_callback_query(
+    filters.regex(r"^provider/\d+$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_number_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle provider number selection callback"""
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    provider_num = int(parts[1])
+    # Get all providers to calculate which one was selected
+    result = await read_db.execute(select(AIProvider))
+    providers = result.scalars().all()
+
+    if 1 <= provider_num <= len(providers):
+        provider = providers[provider_num - 1]
+        # Show provider actions for this specific provider
+        await show_provider_actions(
+            client, callback_query.message, provider, force_cloud=False
         )
-        await callback_query.answer()
-        return
+    else:
+        await callback_query.answer("Invalid provider number!", show_alert=True)
+    await callback_query.answer()
 
-    # Handle back from pagination: provider/back
-    if action == "back":
-        await show_providers_list(client, callback_query.message, 0, force_cloud=False)
-        await callback_query.answer()
-        return
 
-    # Handle close: provider/close
-    if action == "close":
-        await callback_query.message.delete()
-        if callback_query.message.reply_to_message:
-            await callback_query.message.reply_to_message.delete()
-        await callback_query.answer()
-        return
-
-    # Handle number selection: provider/{number}
-    if action.isdigit():
-        provider_num = int(action)
-        # Get all providers to calculate which one was selected
-        result = await read_db.execute(select(AIProvider))
-        providers = result.scalars().all()
-
-        if 1 <= provider_num <= len(providers):
-            provider = providers[provider_num - 1]
-            # Show provider actions for this specific provider
-            await show_provider_actions(
-                client, callback_query.message, provider, force_cloud=False
-            )
-        else:
-            await callback_query.answer("Invalid provider number!", show_alert=True)
-        return
-
-    # Handle provider_id based actions
-    provider_id = int(parts[2]) if len(parts) > 2 and parts[2].isdigit() else None
-
-    # Extract additional args if present (for models/{provider_id}/{model} or models_page/{provider_id}/{page})
-    extra_args = parts[3:] if len(parts) > 3 else []
-
-    if provider_id is None:
-        await callback_query.answer("Invalid callback!", show_alert=True)
-        return
-
-    # Get provider from database (read from local)
+@Client.on_callback_query(
+    filters.regex(r"^provider/select/\d+$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_select_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle provider selection callback"""
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    provider_id = int(parts[2])
 
     result = await read_db.execute(
         select(AIProvider).where(AIProvider.id == provider_id)
@@ -92,117 +100,192 @@ async def provider_handler(client: Client, callback_query: types.CallbackQuery):
         await callback_query.answer("Provider not found!", show_alert=True)
         return
 
-    if action == "select":
-        # Set provider as default (write via cloud)
-        await write_db.set_default_provider(provider)
-        await callback_query.answer(
-            f"Provider `{provider.name}` is now default!", show_alert=True
-        )
-        # Refresh message - go back to list
-        # Use cloud_db to get the latest default provider to ensure consistency
-        await show_providers_list(client, callback_query.message, 0, force_cloud=True)
+    # Set provider as default (write via cloud)
+    await write_db.set_default_provider(provider)
+    await callback_query.answer(
+        f"Provider `{provider.name}` is now default!", show_alert=True
+    )
 
-    elif action == "edit":
-        # Show edit form for provider details
-        buttons = [
-            [
-                types.InlineKeyboardButton(
-                    text="⬅️ Back",
-                    callback_data="provider/back",
-                ),
-            ],
-        ]
-        markup = types.InlineKeyboardMarkup(buttons)
-        default_provider = await read_db.get_default_provider()
-        default_tag = (
-            " ⭐ (Default)"
-            if default_provider and provider.id == default_provider.id
-            else ""
-        )
-        await callback_query.message.edit_text(
-            f"**Edit Provider: {provider.name}**{default_tag}\n\n"
-            f"URL: `{provider.base_url}`\n"
-            f"API Key: `{provider.api_key[:10]}...`\n\n"
-            f"⚠️ Edit functionality not implemented yet.",
-            reply_markup=markup,
-        )
 
-    elif action == "delete":
-        # Delete provider (write via cloud)
-        await write_db.delete(provider)
-        await callback_query.answer(
-            f"Provider `{provider.name}` deleted!", show_alert=True
-        )
-        await show_providers_list(client, callback_query.message, 0, force_cloud=False)
+@Client.on_callback_query(
+    filters.regex(r"^provider/edit/\d+$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_edit_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle provider edit callback"""
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    provider_id = int(parts[2])
 
-    elif action == "models":
-        # Handle nested actions for models callback
-        if len(extra_args) >= 2 and extra_args[0] == "page":
-            # Pagination callback: provider/models/{provider_id}/page/{page}
-            page = int(extra_args[1])
-            await show_provider_models(
-                client, callback_query.message, provider.id, provider.name, page
-            )
-        elif len(extra_args) >= 1 and extra_args[0] == "back":
-            # Back from models to provider actions
-            await show_provider_actions(
-                client, callback_query.message, provider, force_cloud=False
-            )
-        elif len(extra_args) >= 1:
-            # Model selection callback: provider/models/{provider_id}/{model_number}
-            if extra_args[0].isdigit():
-                # Handle model selection by number
-                model_number = int(extra_args[0])
+    result = await read_db.execute(
+        select(AIProvider).where(AIProvider.id == provider_id)
+    )
+    provider = result.scalars().first()
 
-                all_models = await get_provider_models(provider=provider)
+    if not provider:
+        await callback_query.answer("Provider not found!", show_alert=True)
+        return
 
-                # Check if models list is empty
-                if not all_models:
-                    await callback_query.answer("No models available!", show_alert=True)
-                    return
+    default_provider = await read_db.get_default_provider()
+    default_tag = (
+        " ⭐ (Default)"
+        if default_provider and provider.id == default_provider.id
+        else ""
+    )
+    await callback_query.answer(
+        f"**Edit Provider: {provider.name}**{default_tag}\n\n"
+        f"URL: `{provider.base_url}`\n"
+        f"API Key: `{provider.api_key[:10]}...`\n\n"
+        f"⚠️ Edit functionality not implemented yet.",
+        show_alert=True,
+    )
 
-                # Validate model number (1-based indexing)
-                if 1 <= model_number <= len(all_models):
-                    # Convert from 1-based to 0-based indexing
-                    actual_model_index = model_number - 1
-                    selected_model = all_models[actual_model_index]
-                    # Save selected model to database
-                    await write_db.set_default_model(
-                        "chat", provider.name, selected_model
-                    )
-                    await callback_query.answer(
-                        f"Selected model: `{selected_model}`", show_alert=True
-                    )
-                    # Refresh the models list (stay on current page if possible)
-                    # Try to extract page from callback query message text
-                    page = 0
-                    if callback_query.message.text:
-                        import re
 
-                        page_match = re.search(
-                            r"\(Page (\d+)/(\d+)\)", callback_query.message.text
-                        )
-                        if page_match:
-                            page = (
-                                int(page_match.group(1)) - 1
-                            )  # Convert to 0-based index
-                    await show_provider_models(
-                        client, callback_query.message, provider.id, provider.name, page
-                    )
-                else:
-                    await callback_query.answer(
-                        "Invalid model number!", show_alert=True
-                    )
-            else:
-                await show_provider_models(
-                    client, callback_query.message, provider.id, provider.name, 0
-                )
-        else:
-            # Initial models view
-            await show_provider_models(
-                client, callback_query.message, provider.id, provider.name, 0
-            )
+@Client.on_callback_query(
+    filters.regex(r"^provider/delete/\d+$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_delete_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle provider delete callback"""
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    provider_id = int(parts[2])
 
+    result = await read_db.execute(
+        select(AIProvider).where(AIProvider.id == provider_id)
+    )
+    provider = result.scalars().first()
+
+    if not provider:
+        await callback_query.answer("Provider not found!", show_alert=True)
+        return
+
+    # Delete provider (write via cloud)
+    await write_db.delete(provider)
+    await callback_query.answer(f"Provider `{provider.name}` deleted!", show_alert=True)
+    await show_providers_list(client, callback_query.message, 0, force_cloud=False)
+
+
+@Client.on_callback_query(
+    filters.regex(r"^provider/models_/\d+$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_models_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle initial provider models callback"""
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    provider_id = int(parts[2])
+
+    result = await read_db.execute(
+        select(AIProvider).where(AIProvider.id == provider_id)
+    )
+    provider = result.scalars().first()
+
+    if not provider:
+        await callback_query.answer("Provider not found!", show_alert=True)
+        return
+
+    # Initial models view
+    await show_provider_models(
+        client, callback_query.message, provider.id, provider.name, 0
+    )
+    await callback_query.answer()
+
+
+@Client.on_callback_query(
+    filters.regex(r"^provider/models_/\d+/page/\d+$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_models_page_handler(
+    client: Client, callback_query: types.CallbackQuery
+):
+    """Handle provider models pagination callback"""
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    provider_id = int(parts[2])
+    page = int(parts[4])
+
+    result = await read_db.execute(
+        select(AIProvider).where(AIProvider.id == provider_id)
+    )
+    provider = result.scalars().first()
+
+    if not provider:
+        await callback_query.answer("Provider not found!", show_alert=True)
+        return
+
+    await show_provider_models(
+        client, callback_query.message, provider.id, provider.name, page
+    )
+    await callback_query.answer()
+
+
+@Client.on_callback_query(
+    filters.regex(r"^provider/models_/\d+/back$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_models_back_handler(
+    client: Client, callback_query: types.CallbackQuery
+):
+    """Handle back from models to provider actions callback"""
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    provider_id = int(parts[2])
+
+    result = await read_db.execute(
+        select(AIProvider).where(AIProvider.id == provider_id)
+    )
+    provider = result.scalars().first()
+
+    if not provider:
+        await callback_query.answer("Provider not found!", show_alert=True)
+        return
+
+    # Back from models to provider actions
+    await show_provider_actions(
+        client, callback_query.message, provider, force_cloud=False
+    )
+    await callback_query.answer()
+
+
+@Client.on_callback_query(
+    filters.regex(r"^provider_models_select/\d+/\d+$")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_models_select_handler(
+    client: Client, callback_query: types.CallbackQuery
+):
+    """Handle provider model selection callback"""
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    provider_id = int(parts[1])
+    model_index = int(parts[2])
+
+    result = await read_db.execute(
+        select(AIProvider).where(AIProvider.id == provider_id)
+    )
+    provider = result.scalars().first()
+
+    if not provider:
+        await callback_query.answer("Provider not found!", show_alert=True)
+        return
+
+    all_models = await get_provider_models(provider=provider)
+
+    # Check if models list is empty
+    if not all_models:
+        await callback_query.answer("No models available!", show_alert=True)
+        return
+
+    # Validate model number (1-based indexing)
+    # Convert from 1-based to 0-based indexing
+    actual_model_index = model_index - 1
+    selected_model = all_models[actual_model_index]
+    # Save selected model to database
+    await write_db.set_default_model("chat", provider.name, selected_model)
+    await write_db.set_default_provider(provider)
+    await callback_query.answer(f"Selected model: `{selected_model}`", show_alert=True)
+    await show_provider_actions(client, callback_query.message, provider)
     await callback_query.answer()
 
 
@@ -304,7 +387,7 @@ async def show_provider_actions(
         [
             types.InlineKeyboardButton(
                 text="🤖 Models",
-                callback_data=f"provider/models/{provider.id}",
+                callback_data=f"provider/models_/{provider.id}",
             ),
             types.InlineKeyboardButton(
                 text="🗑️ Delete",
@@ -371,7 +454,7 @@ async def show_provider_models(
             [
                 types.InlineKeyboardButton(
                     text="⬅️ Back",
-                    callback_data=f"provider/models/{provider_id}/back",
+                    callback_data=f"provider/models_/{provider_id}/back",
                 )
             ]
         ]
@@ -393,7 +476,7 @@ async def show_provider_models(
     markup = create_models_keyboard(
         models=page_models,
         page=page,
-        callback_prefix=f"provider/models/{provider_id}",
+        callback_prefix=f"provider_models_select/{provider_id}",
         total_pages=total_pages,
     )
 
@@ -412,29 +495,3 @@ async def show_provider_models(
         f"Tap a number to select model.",
         reply_markup=markup,
     )
-
-
-@Client.on_callback_query(
-    filters.regex(r"provider/close")
-    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
-)
-async def provider_close_handler(client: Client, callback_query: types.CallbackQuery):
-    """Handle close for providers list"""
-    await callback_query.message.delete()
-    if callback_query.message.reply_to_message:
-        await callback_query.message.reply_to_message.delete()
-
-
-@Client.on_callback_query(
-    filters.regex(r"provider/page/")
-    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
-)
-async def providers_page_handler(client: Client, callback_query: types.CallbackQuery):
-    """Handle pagination for providers list"""
-    from app.handlers.ai_provider.provider_callbacks import show_providers_list
-
-    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
-    parts = str(callback_query.data).split("/")
-    page = int(parts[-1])
-
-    await show_providers_list(client, callback_query.message, page)

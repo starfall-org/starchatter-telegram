@@ -1,7 +1,7 @@
 """Command handlers for AI provider and model management."""
 
-from app.handlers.admin.owner import is_user_owner
-from app.handlers.ai_provider.pagination import (
+from app.handlers.owner import is_user_owner
+from app.handlers.pagination import (
     ITEMS_PER_PAGE,
     create_providers_keyboard,
 )
