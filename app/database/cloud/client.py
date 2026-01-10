@@ -31,7 +31,6 @@ class CloudDatabase:
         self._initialized = True
 
     def _create_engine(self):
-        # Fallback to local sqlite due to libsql segfault
         url = TURSO_DB_URL
         if "secure=true" not in url:
             if "?" in url:
@@ -106,16 +105,22 @@ class CloudDatabase:
     async def add(self, obj):
         # Create a copy of the object for cloud database
         cloud_obj = type(obj)(
-            ** {col.name: getattr(obj, col.name)
-               for col in obj.__table__.columns
-               if hasattr(obj, col.name)}
+            **{
+                col.name: getattr(obj, col.name)
+                for col in obj.__table__.columns
+                if hasattr(obj, col.name)
+            }
         )
-        await self._run_in_session(lambda s, o: (s.add(o), s.commit()), cloud_obj)
+        await self._run_in_session(lambda s, o: s.add(o), cloud_obj)
+        await self.commit()  # Commit to cloud database
+
         # Mirror to local database with a separate object instance
         local_obj = type(obj)(
-            ** {col.name: getattr(obj, col.name)
-               for col in obj.__table__.columns
-               if hasattr(obj, col.name)}
+            **{
+                col.name: getattr(obj, col.name)
+                for col in obj.__table__.columns
+                if hasattr(obj, col.name)
+            }
         )
         await local_db.add(local_obj)
 
@@ -130,35 +135,47 @@ class CloudDatabase:
         pk_name = pk_column.name
         pk_value = getattr(obj, pk_name)
 
-        # Delete from cloud database by querying within session
+        # Delete from cloud database
         await self._run_in_session(
-            lambda s, pk, model: (s.execute(
+            lambda s, pk, model: s.execute(
                 model.__table__.delete().where(getattr(model, pk) == pk_value)
-            ), s.commit()),
-            pk_name, type(obj)
+            ),
+            pk_name,
+            type(obj),
         )
+        await self.commit()  # Commit to cloud database
+
         # Delete from local database
         await local_db._run_in_session(
-            lambda s, pk, model: (s.execute(
+            lambda s, pk, model: s.execute(
                 model.__table__.delete().where(getattr(model, pk) == pk_value)
-            ), s.commit()),
-            pk_name, type(obj)
+            ),
+            pk_name,
+            type(obj),
         )
+        # Commit to local database
+        await local_db.commit()
 
     async def merge(self, obj):
         # Create a completely new object instance FIRST to avoid session conflicts
         obj_copy = type(obj)(
-            ** {col.name: getattr(obj, col.name)
-               for col in obj.__table__.columns
-               if hasattr(obj, col.name)}
+            **{
+                col.name: getattr(obj, col.name)
+                for col in obj.__table__.columns
+                if hasattr(obj, col.name)
+            }
         )
         # Now merge the copy to cloud database (copy is not attached to any session)
-        await self._run_in_session(lambda s, o: (s.merge(o), s.commit()), obj_copy)
+        await self._run_in_session(lambda s, o: s.merge(o), obj_copy)
+        await self.commit()  # Commit to cloud database
+
         # Create another copy for local database
         local_obj = type(obj)(
-            ** {col.name: getattr(obj, col.name)
-               for col in obj.__table__.columns
-               if hasattr(obj, col.name)}
+            **{
+                col.name: getattr(obj, col.name)
+                for col in obj.__table__.columns
+                if hasattr(obj, col.name)
+            }
         )
         await local_db.merge(local_obj)
 
@@ -186,7 +203,7 @@ class CloudDatabase:
         return None
 
     async def set_default_provider(self, provider: AIProvider):
-        """Set default provider in DefaultModel"""
+        """Set default provider in DefaultModel - mirrors to local"""
         result = await self.execute(
             select(DefaultModel).filter_by(feature="default_provider")
         )
@@ -196,10 +213,36 @@ class CloudDatabase:
             default_model = DefaultModel(
                 feature="default_provider", provider_name=provider.name
             )
+            # Mirror to local database
             await self.add(default_model)
+            local_default_model = DefaultModel(
+                feature="default_provider", provider_name=provider.name
+            )
+            await local_db.add(local_default_model)
         else:
-            default_model.provider_name = provider.name
+            # Update cloud database
+            await self._run_in_session(
+                lambda s: (
+                    s.execute(
+                        DefaultModel.__table__.update()
+                        .where(DefaultModel.feature == "default_provider")
+                        .values(provider_name=provider.name)
+                    )
+                )
+            )
             await self.commit()
+
+            # Mirror update to local database
+            await local_db._run_in_session(
+                lambda s: (
+                    s.execute(
+                        DefaultModel.__table__.update()
+                        .where(DefaultModel.feature == "default_provider")
+                        .values(provider_name=provider.name)
+                    )
+                )
+            )
+            await local_db.commit()
 
     # DefaultModel methods
     async def get_default_model(self, feature: str):
@@ -214,26 +257,53 @@ class CloudDatabase:
         model: str = None,
         config: dict = None,
     ):
-        """Set default model for a feature"""
+        """Set default model for a feature - mirrors to local"""
         result = await self.execute(select(DefaultModel).filter_by(feature=feature))
         default_model = result.scalars().first()
 
+        # Build update data
+        update_data = {}
+        if provider_name is not None:
+            update_data["provider_name"] = provider_name
+        if model is not None:
+            update_data["model"] = model
+        if config is not None:
+            update_data["config"] = config
+
         if not default_model:
+            # Create new - will be mirrored by add method
             default_model = DefaultModel(
                 feature=feature,
-                provider_name=provider_name,
-                model=model,
+                provider_name=provider_name or "",
+                model=model or "",
                 config=config or {},
             )
             await self.add(default_model)
         else:
-            if provider_name is not None:
-                default_model.provider_name = provider_name
-            if model is not None:
-                default_model.model = model
-            if config is not None:
-                default_model.config = config
-            await self.commit()
+            if update_data:
+                # Update cloud database
+                await self._run_in_session(
+                    lambda s: (
+                        s.execute(
+                            DefaultModel.__table__.update()
+                            .where(DefaultModel.feature == feature)
+                            .values(**update_data)
+                        )
+                    )
+                )
+                await self.commit()
+
+                # Mirror update to local database
+                await local_db._run_in_session(
+                    lambda s: (
+                        s.execute(
+                            DefaultModel.__table__.update()
+                            .where(DefaultModel.feature == feature)
+                            .values(**update_data)
+                        )
+                    )
+                )
+                await local_db.commit()
 
     # TelegramUser (Owner) methods
     async def get_user(self, user_id: int):
@@ -252,17 +322,40 @@ class CloudDatabase:
         username: str = None,
         full_name: str = None,
     ):
-        """Set owner privilege for user"""
+        """Set owner privilege for user - mirrors to local"""
         user = await self.get_user(user_id)
         if user:
-            user.is_owner = is_owner
+            # Update cloud user
+            update_data = {"is_owner": is_owner}
             if username:
-                user.username = username
+                update_data["username"] = username
             if full_name:
-                user.first_name = full_name
+                update_data["first_name"] = full_name
+
+            await self._run_in_session(
+                lambda s: (
+                    s.execute(
+                        TelegramUser.__table__.update()
+                        .where(TelegramUser.id == user_id)
+                        .values(**update_data)
+                    )
+                )
+            )
             await self.commit()
+
+            # Mirror update to local user
+            await local_db._run_in_session(
+                lambda s: (
+                    s.execute(
+                        TelegramUser.__table__.update()
+                        .where(TelegramUser.id == user_id)
+                        .values(**update_data)
+                    )
+                )
+            )
+            await local_db.commit()
         else:
-            # Tạo user mới
+            # Tạo user mới - will be mirrored by add method
             first_name = full_name or ""
             user = TelegramUser(
                 id=user_id,

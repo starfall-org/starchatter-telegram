@@ -33,6 +33,46 @@ async def models():
         return []
 
 
+async def get_client_for_provider(provider: AIProvider) -> AsyncClient:
+    """Get OpenAI client for a specific provider"""
+    return AsyncClient(
+        base_url=provider.base_url,
+        api_key=provider.api_key,
+    )
+
+async def get_provider_models(provider_name: str | None = None, provider: AIProvider | None = None):
+    """Get list of models for a specific provider.
+    If provider_name is provided, use that provider.
+    If provider is provided directly, use that.
+    Otherwise, use default provider.
+    """
+    # Resolve provider
+    if provider is None:
+        if provider_name:
+            db_provider = await local_db.get_provider_by_name(provider_name)
+            if not db_provider:
+                return []
+            provider = db_provider
+        else:
+            provider = await local_db.get_default_provider()
+            if not provider:
+                return []
+
+    # Try to get models from provider API first
+    try:
+        client = await get_client_for_provider(provider)
+        models_list = await client.models.list()
+        return [m.id for m in models_list.data]
+    except Exception as e:
+        print(f"Error calling provider API for {provider.name}: {e}, falling back to AIProvider models")
+
+    # Fallback: get from AIProvider.models field
+    if provider and provider.models:
+        return provider.models
+
+    # If no models, return empty list
+    return []
+
 async def get_model() -> str:
     """Get model ID from DefaultModel (read from local)"""
     default_model = await local_db.get_default_model("chat")

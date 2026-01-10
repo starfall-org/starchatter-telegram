@@ -3,7 +3,7 @@
 from pyrogram import Client, enums, filters, types
 from sqlalchemy import select
 
-from app.ai.base import models as get_models
+from app.ai.base import get_provider_models
 from app.database.cloud import cloud_db
 from app.database.local import local_db
 from app.database.models import AIProvider
@@ -11,7 +11,6 @@ from app.handlers.admin.owner import is_user_owner
 from app.handlers.ai_provider.pagination import (
     ITEMS_PER_PAGE,
     create_models_keyboard,
-    create_provider_actions_keyboard,
     create_providers_keyboard,
 )
 
@@ -31,20 +30,22 @@ async def provider_handler(client: Client, callback_query: types.CallbackQuery):
 
     # Handle variable number of parts
     action = parts[1] if len(parts) > 1 else ""
-    
+
     # Handle pagination: provider/page/{page}
     if action == "page" and len(parts) > 2:
         page = int(parts[2])
-        await show_providers_list(client, callback_query.message, page, force_cloud=False)
+        await show_providers_list(
+            client, callback_query.message, page, force_cloud=False
+        )
         await callback_query.answer()
         return
-    
+
     # Handle back from pagination: provider/back
     if action == "back":
         await show_providers_list(client, callback_query.message, 0, force_cloud=False)
         await callback_query.answer()
         return
-    
+
     # Handle close: provider/close
     if action == "close":
         await callback_query.message.delete()
@@ -59,11 +60,13 @@ async def provider_handler(client: Client, callback_query: types.CallbackQuery):
         # Get all providers to calculate which one was selected
         result = await read_db.execute(select(AIProvider))
         providers = result.scalars().all()
-        
+
         if 1 <= provider_num <= len(providers):
             provider = providers[provider_num - 1]
             # Show provider actions for this specific provider
-            await show_provider_actions(client, callback_query.message, provider, force_cloud=False)
+            await show_provider_actions(
+                client, callback_query.message, provider, force_cloud=False
+            )
         else:
             await callback_query.answer("Invalid provider number!", show_alert=True)
         return
@@ -142,27 +145,31 @@ async def provider_handler(client: Client, callback_query: types.CallbackQuery):
             )
         elif len(extra_args) >= 1 and extra_args[0] == "back":
             # Back from models to provider actions
-            await show_provider_actions(client, callback_query.message, provider, force_cloud=False)
+            await show_provider_actions(
+                client, callback_query.message, provider, force_cloud=False
+            )
         elif len(extra_args) >= 1:
             # Model selection callback: provider/models/{provider_id}/{model_number}
             if extra_args[0].isdigit():
                 # Handle model selection by number
                 model_number = int(extra_args[0])
-                
-                all_models = await get_models()
-                
+
+                all_models = await get_provider_models(provider=provider)
+
                 # Check if models list is empty
                 if not all_models:
                     await callback_query.answer("No models available!", show_alert=True)
                     return
-                
+
                 # Validate model number (1-based indexing)
                 if 1 <= model_number <= len(all_models):
                     # Convert from 1-based to 0-based indexing
                     actual_model_index = model_number - 1
                     selected_model = all_models[actual_model_index]
                     # Save selected model to database
-                    await write_db.set_default_model("chat", provider.name, selected_model)
+                    await write_db.set_default_model(
+                        "chat", provider.name, selected_model
+                    )
                     await callback_query.answer(
                         f"Selected model: `{selected_model}`", show_alert=True
                     )
@@ -171,14 +178,21 @@ async def provider_handler(client: Client, callback_query: types.CallbackQuery):
                     page = 0
                     if callback_query.message.text:
                         import re
-                        page_match = re.search(r"\(Page (\d+)/(\d+)\)", callback_query.message.text)
+
+                        page_match = re.search(
+                            r"\(Page (\d+)/(\d+)\)", callback_query.message.text
+                        )
                         if page_match:
-                            page = int(page_match.group(1)) - 1  # Convert to 0-based index
+                            page = (
+                                int(page_match.group(1)) - 1
+                            )  # Convert to 0-based index
                     await show_provider_models(
                         client, callback_query.message, provider.id, provider.name, page
                     )
                 else:
-                    await callback_query.answer("Invalid model number!", show_alert=True)
+                    await callback_query.answer(
+                        "Invalid model number!", show_alert=True
+                    )
             else:
                 await show_provider_models(
                     client, callback_query.message, provider.id, provider.name, 0
@@ -188,21 +202,27 @@ async def provider_handler(client: Client, callback_query: types.CallbackQuery):
             await show_provider_models(
                 client, callback_query.message, provider.id, provider.name, 0
             )
-    
+
     await callback_query.answer()
 
 
-async def show_providers_list(client: Client, message: types.Message, page: int = 0, force_cloud: bool = False):
+async def show_providers_list(
+    client: Client, message: types.Message, page: int = 0, force_cloud: bool = False
+):
     """Display providers list with pagination."""
 
     result = await read_db.execute(select(AIProvider))
     providers = result.scalars().all()
     # Use cloud database if force_cloud is True to get the latest default provider
-    default_provider = await (cloud_db.get_default_provider() if force_cloud else read_db.get_default_provider())
+    default_provider = await (
+        cloud_db.get_default_provider()
+        if force_cloud
+        else read_db.get_default_provider()
+    )
 
     if not providers:
         # Check if this is a reply to a command message
-        if hasattr(message, 'reply_to_message') and message.reply_to_message:
+        if hasattr(message, "reply_to_message") and message.reply_to_message:
             await message.reply_to_message.reply(
                 "No providers yet. Add a provider using:\n"
                 "`/add_provider <name> <base_url> <api_key>`"
@@ -217,7 +237,7 @@ async def show_providers_list(client: Client, message: types.Message, page: int 
 
     # Prepare providers list with (id, name) tuples
     providers_list = [(p.id, p.name) for p in providers]
-    
+
     # Calculate pagination
     total_pages = max(1, (len(providers_list) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
     start_idx = page * ITEMS_PER_PAGE
@@ -249,11 +269,20 @@ async def show_providers_list(client: Client, message: types.Message, page: int 
         await message.edit_text(new_text, reply_markup=markup)
 
 
-async def show_provider_actions(client: Client, message: types.Message, provider: AIProvider, force_cloud: bool = False):
+async def show_provider_actions(
+    client: Client,
+    message: types.Message,
+    provider: AIProvider,
+    force_cloud: bool = False,
+):
     """Display action buttons for a specific provider."""
-    
-    default_provider = await (cloud_db.get_default_provider() if force_cloud else read_db.get_default_provider())
-    
+
+    default_provider = await (
+        cloud_db.get_default_provider()
+        if force_cloud
+        else read_db.get_default_provider()
+    )
+
     # Create action buttons for this provider
     buttons = [
         [
@@ -290,11 +319,11 @@ async def show_provider_actions(client: Client, message: types.Message, provider
         ],
     ]
     markup = types.InlineKeyboardMarkup(buttons)
-    
+
     # Build message
     is_default = default_provider and provider.id == default_provider.id
     status = " ⭐ (Default)" if is_default else ""
-    
+
     await message.edit_text(
         f"**Provider: {provider.name}**{status}\n\n"
         f"URL: `{provider.base_url}`\n"
@@ -312,9 +341,48 @@ async def show_provider_models(
     page: int,
 ):
     """Display models list of a provider with pagination using numbered buttons."""
-    from app.ai.base import models as get_models
+    # Get provider object by ID
+    result = await read_db.execute(
+        select(AIProvider).where(AIProvider.id == provider_id)
+    )
+    provider_object = result.scalars().first()
 
-    all_models = await get_models()
+    if not provider_object:
+        buttons = [
+            [
+                types.InlineKeyboardButton(
+                    text="⬅️ Back",
+                    callback_data="provider/back",
+                ),
+            ],
+        ]
+        markup = types.InlineKeyboardMarkup(buttons)
+        await message.edit_text(
+            "**Error**\n\nProvider not found!",
+            reply_markup=markup,
+        )
+        return
+
+    all_models = await get_provider_models(provider=provider_object)
+
+    # Handle empty models list
+    if not all_models:
+        buttons = [
+            [
+                types.InlineKeyboardButton(
+                    text="⬅️ Back",
+                    callback_data=f"provider/models/{provider_id}/back",
+                )
+            ]
+        ]
+        markup = types.InlineKeyboardMarkup(buttons)
+        await message.edit_text(
+            f"**Models for {provider_name}**\n\n"
+            f"No models available.\n\n"
+            f"Please check your provider settings or API connection.",
+            reply_markup=markup,
+        )
+        return
 
     total_pages = max(1, (len(all_models) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
     start_idx = page * ITEMS_PER_PAGE
@@ -344,3 +412,29 @@ async def show_provider_models(
         f"Tap a number to select model.",
         reply_markup=markup,
     )
+
+
+@Client.on_callback_query(
+    filters.regex(r"provider/close")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def provider_close_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle close for providers list"""
+    await callback_query.message.delete()
+    if callback_query.message.reply_to_message:
+        await callback_query.message.reply_to_message.delete()
+
+
+@Client.on_callback_query(
+    filters.regex(r"provider/page/")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def providers_page_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle pagination for providers list"""
+    from app.handlers.ai_provider.provider_callbacks import show_providers_list
+
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    page = int(parts[-1])
+
+    await show_providers_list(client, callback_query.message, page)

@@ -23,18 +23,30 @@ def _get_state_key(chat_id: int, state_type: str) -> str:
 
 async def _get_group_state(chat_id: int) -> dict:
     """Get group state from local database"""
-    chatbot_disabled = await local_db.get_state(_get_state_key(chat_id, "chatbot_disabled"))
-    anti_spam_disabled = await local_db.get_state(_get_state_key(chat_id, "anti_spam_disabled"))
+    chatbot_disabled = await local_db.get_state(
+        _get_state_key(chat_id, "chatbot_disabled")
+    )
+    anti_spam_disabled = await local_db.get_state(
+        _get_state_key(chat_id, "anti_spam_disabled")
+    )
     return {
         "chatbot_disabled": chatbot_disabled == "true",
         "anti_spam_disabled": anti_spam_disabled == "true",
     }
 
 
-async def _set_group_state(chat_id: int, chatbot_disabled: bool, anti_spam_disabled: bool):
+async def _set_group_state(
+    chat_id: int, chatbot_disabled: bool, anti_spam_disabled: bool
+):
     """Save group state to local database"""
-    await local_db.set_state(_get_state_key(chat_id, "chatbot_disabled"), "true" if chatbot_disabled else "false")
-    await local_db.set_state(_get_state_key(chat_id, "anti_spam_disabled"), "true" if anti_spam_disabled else "false")
+    await local_db.set_state(
+        _get_state_key(chat_id, "chatbot_disabled"),
+        "true" if chatbot_disabled else "false",
+    )
+    await local_db.set_state(
+        _get_state_key(chat_id, "anti_spam_disabled"),
+        "true" if anti_spam_disabled else "false",
+    )
 
 
 @Client.on_message(filters.command("menu") & filters.group)  # type: ignore
@@ -42,10 +54,10 @@ async def group_menu(client: Client, message: types.Message):
     """Display group administration menu"""
     await message.reply_chat_action(enums.ChatAction.TYPING)
     chat_id = message.chat.id
-    
+
     # Lấy state từ local database
     state = await _get_group_state(chat_id)
-    
+
     # Kiểm tra quyền admin
     if not (
         await is_chat_owner(message.from_user, message.chat)
@@ -89,7 +101,7 @@ async def group_admin_menu_handler(client: Client, callback_query: types.Callbac
     await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
     action = str(callback_query.data)
     chat_id = callback_query.message.chat.id
-    
+
     # Kiểm tra quyền admin
     if not (
         await is_chat_owner(callback_query.from_user, callback_query.message.chat)
@@ -98,42 +110,49 @@ async def group_admin_menu_handler(client: Client, callback_query: types.Callbac
     ):
         admin_text = await localize(
             "You must be an admin to perform this action.",
-            user_id=callback_query.from_user.id
+            user_id=callback_query.from_user.id,
         )
         await callback_query.answer(admin_text)
         return
-    
+
     # Lấy state hiện tại
     state = await _get_group_state(chat_id)
-    
+
     if action == "menu/chatbot":
         # Toggle chatbot state
         new_chatbot_disabled = not state["chatbot_disabled"]
-        await _set_group_state(chat_id, new_chatbot_disabled, state["anti_spam_disabled"])
-        
+        await _set_group_state(
+            chat_id, new_chatbot_disabled, state["anti_spam_disabled"]
+        )
+
         chatbot_status = await localize(
-            "Chatbot disabled for this group." if new_chatbot_disabled else "Chatbot enabled for this group.",
-            user_id=callback_query.from_user.id
+            "Chatbot disabled for this group."
+            if new_chatbot_disabled
+            else "Chatbot enabled for this group.",
+            user_id=callback_query.from_user.id,
         )
         await callback_query.answer(chatbot_status)
         await callback_query.message.edit_text(chatbot_status)
-        
+
     elif action == "menu/anti_spam":
         # Toggle anti-spam state
         new_anti_spam_disabled = not state["anti_spam_disabled"]
-        await _set_group_state(chat_id, state["chatbot_disabled"], new_anti_spam_disabled)
-        
+        await _set_group_state(
+            chat_id, state["chatbot_disabled"], new_anti_spam_disabled
+        )
+
         antispam_status = await localize(
-            "Anti-Spam disabled for this group." if new_anti_spam_disabled else "Anti-Spam enabled for this group.",
-            user_id=callback_query.from_user.id
+            "Anti-Spam disabled for this group."
+            if new_anti_spam_disabled
+            else "Anti-Spam enabled for this group.",
+            user_id=callback_query.from_user.id,
         )
         await callback_query.answer(antispam_status)
         await callback_query.message.edit_text(antispam_status)
-        
+
     elif action == "menu/goodbye":
         goodbye_text = await localize(
-            "Goodbye! 👋",
-            user_id=callback_query.from_user.id
+            "Goodbye! 👋", user_id=callback_query.from_user.id
         )
         await callback_query.answer(goodbye_text)
         await callback_query.message.edit_text(goodbye_text)

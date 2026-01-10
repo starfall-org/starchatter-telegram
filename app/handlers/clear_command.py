@@ -1,25 +1,14 @@
 import asyncio
 
 from app.ai.text import localize
-from app.database.local import local_db
 from pyrogram import Client, enums, filters, types
+from agents import SQLiteSession
 
 basic_buttons = [
     types.InlineKeyboardButton(text="Channel", url="https://t.me/starfall_org"),
     types.InlineKeyboardButton(text="Group", url="https://t.me/starfall_community"),
     types.InlineKeyboardButton(text="Discord", url="https://discord.gg/9WF54BSc4s"),
 ]
-
-
-@Client.on_message(filters.command(["start", "help"]))  # type: ignore
-async def start(client: Client, message: types.Message):
-    """Handle start/help command"""
-    markup = types.InlineKeyboardMarkup([[button for button in basic_buttons]])
-    welcome_text = await localize(
-        "Welcome to StarChatter.\n\nAvailable commands:\n\n/image [prompt] - Generate an image (NSFW non-blocked).\n/poem [prompt] - Generate a poem.",
-        user_id=message.from_user.id,
-    )
-    await message.reply(welcome_text, reply_markup=markup)
 
 
 @Client.on_message(filters.command("clear"))  # type: ignore
@@ -39,9 +28,10 @@ async def clear_handler(client: Client, message: types.Message):
             return
     await message.reply_chat_action(enums.ChatAction.TYPING)
     chat_id = message.chat.id
-
+    session = SQLiteSession(f"chat_{chat_id}", "conversations.sqlite")
+    await session.clear_session()
     cleared_text = await localize(
-        "__Conversation cleared. The bot now forgets everything about you.__",
+        "__Conversation cleared.__",
         user_id=message.from_user.id,
     )
     msg = await message.reply(
