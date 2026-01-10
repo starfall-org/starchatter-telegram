@@ -167,7 +167,17 @@ async def models_number_handler(client: Client, callback_query: types.CallbackQu
 
     await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
     parts = str(callback_query.data).split("/")
-    model_num = int(parts[1])
+    
+    # Kiểm tra định dạng callback data
+    if len(parts) < 2:
+        await callback_query.answer("Invalid callback data format!", show_alert=True)
+        return
+        
+    try:
+        model_num = int(parts[1])
+    except ValueError:
+        await callback_query.answer("Invalid model number!", show_alert=True)
+        return
 
     all_models = await get_models()
     current_model = await get_model()
@@ -194,6 +204,23 @@ async def models_number_handler(client: Client, callback_query: types.CallbackQu
             await callback_query.answer("No provider configured!", show_alert=True)
         # Delete the models list message
         await callback_query.message.delete()
+    else:
+        await callback_query.answer("Invalid model number!", show_alert=True)
+
+
+@Client.on_callback_query(
+    filters.regex(r"provider/page/")
+    & filters.create(lambda _, __, cq: is_user_owner(cq.from_user.id))  # type: ignore
+)
+async def providers_page_handler(client: Client, callback_query: types.CallbackQuery):
+    """Handle pagination for providers list"""
+    from app.handlers.ai_provider.provider_callbacks import show_providers_list
+    
+    await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
+    parts = str(callback_query.data).split("/")
+    page = int(parts[-1])
+    
+    await show_providers_list(client, callback_query.message, page)
 
 
 @Client.on_message(
@@ -288,8 +315,8 @@ async def add_provider_handler(client: Client, message: types.Message):
     filters.command("providers")
     & filters.create(lambda _, __, m: is_user_owner(m.from_user.id))  # type: ignore
 )
-async def providers_handler(client: Client, message: types.Message):
-    """List and manage AI providers with action buttons"""
+async def providers_handler(client: Client, message: types.Message, page: int = 0):
+    """List AI providers with pagination"""
     await message.reply_chat_action(enums.ChatAction.TYPING)
 
     result = await read_db.execute(select(AIProvider))
@@ -306,24 +333,36 @@ async def providers_handler(client: Client, message: types.Message):
 
     # Prepare providers list with (id, name) tuples
     providers_list = [(p.id, p.name) for p in providers]
+    
+    # Calculate pagination
+    total_pages = max(1, (len(providers_list) + ITEMS_PER_PAGE - 1) // ITEMS_PER_PAGE)
+    start_idx = page * ITEMS_PER_PAGE
+    end_idx = min(start_idx + ITEMS_PER_PAGE, len(providers_list))
+    page_providers = providers_list[start_idx:end_idx]
 
-    # Create action buttons keyboard
-    markup = create_provider_actions_keyboard(
-        providers=providers_list,
+    # Create keyboard with numbered buttons
+    markup = create_providers_keyboard(
+        providers=page_providers,
+        page=page,
         callback_prefix="provider",
+        total_pages=total_pages,
     )
 
-    # Build message with provider names and action descriptions
-    provider_info = []
-    for provider in providers:
-        is_default = default_provider and provider.id == default_provider.id
-        status = " ⭐ (Default)" if is_default else ""
-        provider_info.append(f"🔹 **{provider.name}**{status}")
+    # Build message with provider names and numbers
+    start_num = page * ITEMS_PER_PAGE + 1
+    provider_names = []
+    for i, (provider_id, provider_name) in enumerate(page_providers):
+        num = start_num + i
+        is_default = default_provider and provider_id == default_provider.id
+        prefix = "⭐ " if is_default else ""
+        provider_names.append(f"`{num}`. {prefix}`{provider_name}`")
 
-    providers_text = "\n".join(provider_info)
+    providers_text = "\n".join(provider_names)
 
     await message.reply(
-        f"**AI Providers**\n\n{providers_text}\n\nUse the buttons below to manage each provider.",
+        f"**AI Providers** (Page {page + 1}/{total_pages})\n\n"
+        f"{providers_text}\n\n"
+        f"Tap a number to select provider.",
         reply_markup=markup,
         quote=True,
     )
