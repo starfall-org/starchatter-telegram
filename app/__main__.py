@@ -1,5 +1,13 @@
 import asyncio
-from main import main
+# import uvloop
+
+# Install uvloop and ensure an event loop exists before importing pyrogram
+# uvloop.install()
+
+
+from app.client import client
+from app.main import main
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    client.run(main())

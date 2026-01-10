@@ -1,7 +1,7 @@
 """AI-generated text utility with language detection and fallback."""
 
 import logging
-from database.local import local_db
+from app.database.local import local_db
 from openai import AsyncOpenAI
 
 logger = logging.getLogger(__name__)

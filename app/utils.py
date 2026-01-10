@@ -1,5 +1,5 @@
 from pyrogram import enums, types
-from config import OWNER_ID
+from app.database.cloud import cloud_db
 
 
 async def is_chat_admin(user: types.User, chat: types.Chat) -> bool:
@@ -13,4 +13,4 @@ async def is_chat_owner(user: types.User, chat: types.Chat) -> bool:
 
 
 async def is_owner(user: types.User) -> bool:
-    return user.id == OWNER_ID
+    return await cloud_db.is_owner(user.id)

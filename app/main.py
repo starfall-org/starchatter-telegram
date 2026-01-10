@@ -1,12 +1,13 @@
-import uvloop
-
-uvloop.install()
+from sqlalchemy import select
+from pyrogram import idle
+from app.client import client
+from app.database.cloud import cloud_db
+from app.database.local import local_db
+from app.database.models import AIProvider, DefaultModel, TelegramGroup, TelegramUser
 
 
 async def sync_cloud_to_local(cloud_db, local_db):
-    """Sync tất cả dữ liệu từ cloud về local"""
-    from database.models import AIProvider, TelegramUser, TelegramGroup, DefaultModel, Base
-    from sqlalchemy import select
+    """Sync all data from cloud to local"""
 
     models = [AIProvider, TelegramUser, TelegramGroup, DefaultModel]
 
@@ -20,19 +21,31 @@ async def sync_cloud_to_local(cloud_db, local_db):
             result = await local_db.execute(select(model))
             local_objects = result.scalars().all()
 
-            # Tạo set ID để so sánh
+            # Create ID set for comparison
             cloud_ids = {obj.id for obj in cloud_objects}
             local_ids = {obj.id for obj in local_objects}
 
-            # Thêm những object có trong cloud nhưng không có trong local
+            # Add objects present in cloud but not in local
             for obj in cloud_objects:
                 if obj.id not in local_ids:
-                    await local_db.add(obj)
+                    # Create a new object instance to avoid session conflicts
+                    obj_copy = type(obj)(
+                        ** {col.name: getattr(obj, col.name)
+                           for col in obj.__table__.columns
+                           if hasattr(obj, col.name)}
+                    )
+                    await local_db.add(obj_copy)
 
-            # Xóa những object có trong local nhưng không có trong cloud
+            # Remove objects present in local but not in cloud
             for obj in local_objects:
                 if obj.id not in cloud_ids:
-                    await local_db.delete(obj)
+                    # Create a new object instance to avoid session conflicts
+                    obj_copy = type(obj)(
+                        ** {col.name: getattr(obj, col.name)
+                           for col in obj.__table__.columns
+                           if hasattr(obj, col.name)}
+                    )
+                    await local_db.delete(obj_copy)
 
             print(f"Synced {len(cloud_objects)} {model.__name__} records")
         except Exception as e:
@@ -40,28 +53,16 @@ async def sync_cloud_to_local(cloud_db, local_db):
 
 
 async def main():
-    from client import client
-    from database.cloud import cloud_db
-    from database.local import local_db
-    from pyrogram import idle
-
     await client.start()
-    print("Bot started.")
-
-    # Khởi tạo cả hai databases
     cloud_db.init_db()
     local_db.init_db()
 
     # Sync từ cloud về local
     print("Syncing data from cloud to local...")
+    # try:
     await sync_cloud_to_local(cloud_db, local_db)
+    # except Exception as e:
+    #     print(f"Sync error: {e}")
     print("Sync completed.")
-
     await idle()
     await client.stop()
-
-
-if __name__ == "__main__":
-    import asyncio
-
-    asyncio.run(main())

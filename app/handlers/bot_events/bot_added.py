@@ -1,4 +1,4 @@
-from database.local import local_db
+from app.database.local import local_db
 from pyrogram import Client, enums, filters, types
 
 

@@ -2,16 +2,16 @@ import asyncio
 from datetime import datetime, timedelta
 
 
-from database.models import AIProvider, DefaultModel, TelegramUser, TelegramGroup, TelegramChannel, GroupMember, ChannelMember, Base
+from app.database.models import AIProvider, DefaultModel, TelegramUser, TelegramGroup, TelegramChannel, GroupMember, ChannelMember, Base
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
-LIBSQL_DB_URL = "sqlite+libsql:///local.db"
+LIBSQL_DB_URL = "sqlite:///local.db"
 
 
 class LocalDatabase:
     """
-    Local database - luôn mở, không tự động đóng
+    Local database - always open, no auto-close
     """
 
     _instance = None
@@ -37,7 +37,7 @@ class LocalDatabase:
         self._sessionmaker = sessionmaker(self._engine, expire_on_commit=False)
 
     def init_db(self):
-        """Tạo bảng nếu chưa tồn tại, chỉ chạy một lần khi khởi động."""
+        """Create tables if not exist, run only once on startup."""
         if not self._initialized_db:
             if self._engine is None:
                 self._create_engine()
@@ -68,7 +68,8 @@ class LocalDatabase:
             pass
 
     async def get(self, model, *args, **kwargs):
-        return await self.execute(select(model).filter_by(*args, **kwargs))
+        result = await self.execute(select(model).filter_by(*args, **kwargs))
+        return result.scalars().first()
 
     async def add(self, obj):
         await self._run_in_session(lambda s, o: (s.add(o), s.commit()), obj)
@@ -87,11 +88,11 @@ class LocalDatabase:
 
     # AIProvider methods
     async def get_provider_by_name(self, name: str):
-        """Lấy provider theo tên"""
+        """Get provider by name"""
         return await self.get(AIProvider, name=name)
 
     async def get_default_provider(self):
-        """Lấy provider mặc định từ DefaultModel"""
+        """Get default provider from DefaultModel"""
         result = await self.execute(select(DefaultModel).filter_by(feature="default_provider"))
         default_model = result.scalars().first()
         if default_model and default_model.provider_name:
@@ -99,7 +100,7 @@ class LocalDatabase:
         return None
 
     async def set_default_provider(self, provider: AIProvider):
-        """Đặt provider mặc định trong DefaultModel"""
+        """Set default provider in DefaultModel"""
         result = await self.execute(select(DefaultModel).filter_by(feature="default_provider"))
         default_model = result.scalars().first()
         
@@ -112,12 +113,12 @@ class LocalDatabase:
 
     # DefaultModel methods
     async def get_default_model(self, feature: str):
-        """Lấy model mặc định cho một feature"""
+        """Get default model for a feature"""
         result = await self.execute(select(DefaultModel).filter_by(feature=feature))
         return result.scalars().first()
 
     async def set_default_model(self, feature: str, provider_name: str = None, model: str = None, config: dict = None):
-        """Đặt model mặc định cho một feature"""
+        """Set default model for a feature"""
         result = await self.execute(select(DefaultModel).filter_by(feature=feature))
         default_model = result.scalars().first()
         
@@ -140,16 +141,16 @@ class LocalDatabase:
 
     # TelegramUser (Owner) methods
     async def get_user(self, user_id: int):
-        """Lấy user theo user_id"""
+        """Get user by user_id"""
         return await self.get(TelegramUser, id=user_id)
 
     async def is_owner(self, user_id: int) -> bool:
-        """Kiểm tra user có phải là owner không"""
+        """Check if user is owner"""
         user = await self.get_user(user_id)
         return user is not None and user.is_owner if user else False
 
     async def set_owner(self, user_id: int, is_owner: bool = True, username: str = None, full_name: str = None):
-        """Đặt quyền owner cho user"""
+        """Set owner privilege for user"""
         user = await self.get_user(user_id)
         if user:
             user.is_owner = is_owner
@@ -170,25 +171,25 @@ class LocalDatabase:
             await self.add(user)
 
     async def add_owner(self, user_id: int, username: str = None, full_name: str = None):
-        """Thêm owner mới"""
+        """Add new owner"""
         await self.set_owner(user_id, True, username, full_name)
 
     async def remove_owner(self, user_id: int):
-        """Xóa quyền owner"""
+        """Remove owner privilege"""
         await self.set_owner(user_id, False)
 
     async def get_all_owners(self):
-        """Lấy tất cả owners"""
+        """Get all owners"""
         result = await self.execute(select(TelegramUser).filter_by(is_owner=True))
         return result.scalars().all()
 
     # TelegramGroup methods
     async def get_group(self, group_id: int):
-        """Lấy group theo group_id"""
+        """Get group by group_id"""
         return await self.get(TelegramGroup, id=group_id)
 
     async def add_group(self, group_id: int, title: str, username: str = None):
-        """Thêm hoặc cập nhật group"""
+        """Add or update group"""
         group = await self.get_group(group_id)
         if group:
             group.title = title
@@ -204,11 +205,11 @@ class LocalDatabase:
             await self.add(group)
 
     async def get_channel(self, channel_id: int):
-        """Lấy channel theo channel_id"""
+        """Get channel by channel_id"""
         return await self.get(TelegramChannel, id=channel_id)
 
     async def add_channel(self, channel_id: int, title: str, username: str = None):
-        """Thêm hoặc cập nhật channel"""
+        """Add or update channel"""
         channel = await self.get_channel(channel_id)
         if channel:
             channel.title = title
@@ -224,7 +225,7 @@ class LocalDatabase:
             await self.add(channel)
 
     async def add_or_update_user(self, user_id: int, username: str = None, first_name: str = None, last_name: str = None):
-        """Thêm hoặc cập nhật user"""
+        """Add or update user"""
         user = await self.get_user(user_id)
         if user:
             if username:
@@ -245,12 +246,12 @@ class LocalDatabase:
         return user
 
     async def add_group_member(self, user_id: int, group_id: int, is_admin: bool = False, is_owner: bool = False):
-        """Thêm member vào group với trạng thái admin"""
-        # Đảm bảo user và group tồn tại
+        """Add member to group with admin status"""
+        # Ensure user and group exist
         user = await self.add_or_update_user(user_id)
         await self.add_group(group_id, "")
-        
-        # Kiểm tra và thêm/cập nhật member
+
+        # Check and add/update member
         result = await self.execute(
             select(GroupMember).filter_by(user_id=user_id, group_id=group_id)
         )
@@ -270,12 +271,12 @@ class LocalDatabase:
             await self.add(member)
 
     async def add_channel_member(self, user_id: int, channel_id: int, is_admin: bool = False, is_owner: bool = False):
-        """Thêm member vào channel với trạng thái admin"""
-        # Đảm bảo user và channel tồn tại
+        """Add member to channel with admin status"""
+        # Ensure user and channel exist
         user = await self.add_or_update_user(user_id)
         await self.add_channel(channel_id, "")
-        
-        # Kiểm tra và thêm/cập nhật member
+
+        # Check and add/update member
         result = await self.execute(
             select(ChannelMember).filter_by(user_id=user_id, channel_id=channel_id)
         )

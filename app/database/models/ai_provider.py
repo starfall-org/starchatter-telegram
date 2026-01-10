@@ -11,4 +11,4 @@ class AIProvider(Base):
     name: Mapped[str] = mapped_column(String(50), unique=True)
     base_url: Mapped[str] = mapped_column(String(500))
     api_key: Mapped[str] = mapped_column(String(500))
-    models: Mapped[list[str]] = mapped_column(JSON, default_factory=list)
+    models: Mapped[list[str]] = mapped_column(JSON, default=list)

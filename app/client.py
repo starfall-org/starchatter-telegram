@@ -1,4 +1,4 @@
-from config import API_HASH, API_ID, BOT_TOKEN
+from app.config import API_HASH, API_ID, BOT_TOKEN
 from pyrogram import Client
 
 client = Client(
@@ -6,5 +6,5 @@ client = Client(
     API_ID,
     API_HASH,
     bot_token=BOT_TOKEN,
-    plugins={"root": "handlers"},
+    plugins={"root": "app/handlers"},
 )

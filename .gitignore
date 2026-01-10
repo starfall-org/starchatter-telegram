@@ -3,3 +3,7 @@
 .env
 .mypy_cache
 .codesandbox
+**/*.db
+**/*.sqlite*
+app/starchatter.session
+repro_db.py

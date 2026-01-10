@@ -1,11 +1,11 @@
 import asyncio
 
-from ai.text import localize
-from database.cloud import cloud_db
-from database.local import local_db
-from database.models import TelegramGroup, TelegramUser
+from app.ai.text import localize
+from app.database.cloud import cloud_db
+from app.database.local import local_db
+from app.database.models import TelegramGroup, TelegramUser
 from pyrogram import Client, enums, filters, types
-from utils import is_chat_admin, is_chat_owner, is_owner
+from app.utils import is_chat_admin, is_chat_owner, is_owner
 
 db = cloud_db
 
@@ -17,12 +17,12 @@ basic_buttons = [
 
 
 def _get_state_key(chat_id: int, state_type: str) -> str:
-    """Tạo key cho state lưu trong local database"""
+    """Create key for state stored in local database"""
     return f"group_{chat_id}_{state_type}"
 
 
 async def _get_group_state(chat_id: int) -> dict:
-    """Lấy state của group từ local database"""
+    """Get group state from local database"""
     chatbot_disabled = await local_db.get_state(_get_state_key(chat_id, "chatbot_disabled"))
     anti_spam_disabled = await local_db.get_state(_get_state_key(chat_id, "anti_spam_disabled"))
     return {
@@ -32,14 +32,14 @@ async def _get_group_state(chat_id: int) -> dict:
 
 
 async def _set_group_state(chat_id: int, chatbot_disabled: bool, anti_spam_disabled: bool):
-    """Lưu state của group vào local database"""
+    """Save group state to local database"""
     await local_db.set_state(_get_state_key(chat_id, "chatbot_disabled"), "true" if chatbot_disabled else "false")
     await local_db.set_state(_get_state_key(chat_id, "anti_spam_disabled"), "true" if anti_spam_disabled else "false")
 
 
 @Client.on_message(filters.command("menu") & filters.group)  # type: ignore
 async def group_menu(client: Client, message: types.Message):
-    """Hiển thị menu quản trị nhóm"""
+    """Display group administration menu"""
     await message.reply_chat_action(enums.ChatAction.TYPING)
     chat_id = message.chat.id
     
@@ -85,7 +85,7 @@ async def group_menu(client: Client, message: types.Message):
     filters.regex(r"menu/")  # type: ignore
 )
 async def group_admin_menu_handler(client: Client, callback_query: types.CallbackQuery):
-    """Xử lý callback từ menu quản trị nhóm"""
+    """Handle callback from group administration menu"""
     await callback_query.message.reply_chat_action(enums.ChatAction.TYPING)
     action = str(callback_query.data)
     chat_id = callback_query.message.chat.id
@@ -142,12 +142,12 @@ async def group_admin_menu_handler(client: Client, callback_query: types.Callbac
 
 
 async def is_chatbot_enabled(chat_id: int) -> bool:
-    """Kiểm tra chatbot có được bật không"""
+    """Check if chatbot is enabled"""
     state = await _get_group_state(chat_id)
     return not state["chatbot_disabled"]
 
 
 async def is_anti_spam_enabled(chat_id: int) -> bool:
-    """Kiểm tra anti-spam có được bật không"""
+    """Check if anti-spam is enabled"""
     state = await _get_group_state(chat_id)
     return not state["anti_spam_disabled"]

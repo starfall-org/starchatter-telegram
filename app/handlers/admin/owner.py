@@ -1,6 +1,6 @@
 """Owner authentication handler"""
-from config import OWNER_PASSWORD
-from database.cloud import cloud_db
+from app.config import OWNER_PASSWORD
+from app.database.cloud import cloud_db
 from pyrogram import Client, enums, filters, types
 
 db = cloud_db
@@ -26,16 +26,16 @@ def is_user_owner(user_id: int) -> bool:
 
 @Client.on_message(filters.command("owner") & filters.private)  # type: ignore
 async def owner_handler(client: Client, message: types.Message):
-    """Xác thực quyền owner bằng password"""
+    """Verify owner privilege with password"""
     await message.reply_chat_action(enums.ChatAction.TYPING)
     
     args = message.text.split()
     
     if len(args) < 2:
         await message.reply(
-            "**Xác thực Owner**\n\n"
-            "Nhập password để xác thực:\n"
-            "`/owner <password>`",
+            "**Owner Verification**\n\n"
+            "Enter password to verify:\n"
+            "/owner <password>",
             quote=True,
         )
         return
@@ -43,7 +43,7 @@ async def owner_handler(client: Client, message: types.Message):
     password = args[1]
     
     if verify_password(password):
-        # Thêm user vào danh sách owners (ghi qua cloud)
+        # Add user to owners list (write via cloud)
         user = message.from_user
         await db.add_owner(
             user_id=user.id,
@@ -52,13 +52,13 @@ async def owner_handler(client: Client, message: types.Message):
         )
         
         await message.reply(
-            "✅ **Xác thực thành công!**\n\n"
-            "Bạn đã được thêm vào danh sách owners.",
+            "✅ **Verification successful!**\n\n"
+            "You have been added to the owners list.",
             quote=True,
         )
     else:
         await message.reply(
-            "❌ **Xác thực thất bại!**\n\n"
-            "Password không đúng.",
+            "❌ **Verification failed!**\n\n"
+            "Password is incorrect.",
             quote=True,
         )

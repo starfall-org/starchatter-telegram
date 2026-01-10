@@ -1,4 +1,4 @@
-from ai.base import get_client
+from app.ai.base import get_client
 from gradio_client import Client
 from langdetect import detect
 from PIL import Image
@@ -49,7 +49,7 @@ async def gen_img(
         api_name="/infer",
     )
 
-    # result có thể là đường dẫn hoặc list các đường dẫn
+    # result can be a path or list of paths
 
     img = Image.open(result).convert("RGB")
     img.save(result.split(".")[0] + ".jpg")  # hoặc .jpg

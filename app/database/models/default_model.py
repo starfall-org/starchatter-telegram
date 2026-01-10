@@ -11,4 +11,4 @@ class DefaultModel(Base):
     feature: Mapped[str] = mapped_column(String(50), unique=True)  # chat, translate, poem, image, etc.
     provider_name: Mapped[str] = mapped_column(String(50), nullable=True)
     model: Mapped[str] = mapped_column(String(100), nullable=True)
-    config: Mapped[dict] = mapped_column(JSON, default_factory=dict)
+    config: Mapped[dict] = mapped_column(JSON, default=dict)

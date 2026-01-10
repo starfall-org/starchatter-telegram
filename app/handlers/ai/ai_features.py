@@ -1,8 +1,8 @@
-from ai.agent import AIAgent
-from ai.nsfw import gen_img
-from ai.poem import get_poem
-from database.cloud import cloud_db
-from database.local import local_db
+from app.ai.agent import AIAgent
+from app.ai.nsfw import gen_img
+from app.ai.poem import get_poem
+from app.database.cloud import cloud_db
+from app.database.local import local_db
 from pyrogram import Client, enums, filters, types
 
 # Write to cloud (mirrors to local), read from local (faster)
@@ -22,9 +22,9 @@ basic_buttons = [
     & ~filters.create(lambda _, __, m: m.text.startswith("/"))  # type: ignore
 )
 async def chatbot_handler(client: Client, message: types.Message):
-    """Xử lý tin nhắn chatbot"""
+    """Process chatbot message"""
     await message.reply_chat_action(enums.ChatAction.TYPING)
-    agent = AIAgent()
+    agent = await AIAgent.create()
 
     resp = await agent.run_chat(client, message)
     if resp:
@@ -43,10 +43,9 @@ async def chatbot_handler(client: Client, message: types.Message):
             )
 
     if not message.sender_chat:
-        from database.models import TelegramUser
+        from app.database.models import TelegramUser
 
         user = await read_db.get(TelegramUser, id=message.from_user.id)
-        user = user.scalars().first()
         if not user:
             await write_db.add(
                 TelegramUser(
@@ -57,10 +56,9 @@ async def chatbot_handler(client: Client, message: types.Message):
                 )
             )
     if message.chat.type in [enums.ChatType.GROUP, enums.ChatType.SUPERGROUP]:
-        from database.models import TelegramGroup
+        from app.database.models import TelegramGroup
 
         group = await read_db.get(TelegramGroup, id=message.chat.id)
-        group = group.scalars().first()
         if not group:
             await write_db.add(
                 TelegramGroup(
@@ -73,7 +71,7 @@ async def chatbot_handler(client: Client, message: types.Message):
 
 @Client.on_message(filters.command("poem"))  # type: ignore
 async def poem_handler(client: Client, message: types.Message):
-    """Tạo thơ"""
+    """Generate poem"""
     locale = None
     author = message.from_user.full_name
     hint = message.text.split(" ", 1)[1]
@@ -87,7 +85,7 @@ async def poem_handler(client: Client, message: types.Message):
 
 @Client.on_message(filters.command("image"))  # type: ignore
 async def nsfw_handler(client: Client, message: types.Message):
-    """Tạo hình ảnh"""
+    """Generate image"""
     await message.reply_chat_action(enums.ChatAction.TYPING)
     prompt = message.text.split(" ", 1)[1]
     await message.reply_photo(

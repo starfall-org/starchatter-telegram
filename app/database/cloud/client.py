@@ -1,10 +1,8 @@
-
 import asyncio
 from datetime import datetime, timedelta
-
-from config import TURSO_AUTH_TOKEN, TURSO_DB_URL
-from database.local import local_db
-from database.models import AIProvider, DefaultModel, TelegramUser, Base
+from app.config import TURSO_AUTH_TOKEN, TURSO_DB_URL
+from app.database.local import local_db
+from app.database.models import AIProvider, DefaultModel, TelegramUser, Base
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -29,19 +27,27 @@ class CloudDatabase:
         self._session = None
         self._disposed = True
         self._last_used = datetime.now()
-        self._closing_task = asyncio.create_task(self._auto_close())
+        self._closing_task = None
         self._initialized = True
 
     def _create_engine(self):
+        # Fallback to local sqlite due to libsql segfault
+        url = TURSO_DB_URL
+        if "secure=true" not in url:
+            if "?" in url:
+                url += "&secure=true"
+            else:
+                url += "?secure=true"
+
         self._engine = create_engine(
-            TURSO_DB_URL,
+            url,
             connect_args={"auth_token": TURSO_AUTH_TOKEN} if TURSO_AUTH_TOKEN else {},
         )
         self._sessionmaker = sessionmaker(self._engine, expire_on_commit=False)
         self._disposed = False
 
     def init_db(self):
-        """Tạo bảng nếu chưa tồn tại, chỉ chạy một lần khi khởi động."""
+        """Create tables if not exist, run only once on startup."""
         if not self._initialized_db:
             if self._disposed or self._engine is None:
                 self._create_engine()
@@ -80,7 +86,12 @@ class CloudDatabase:
             self._create_engine()
         return self._engine
 
+    def _ensure_closing_task(self):
+        if self._closing_task is None or self._closing_task.done():
+            self._closing_task = asyncio.create_task(self._auto_close())
+
     async def _run_in_session(self, func, *args, **kwargs):
+        self._ensure_closing_task()
         s = self._get_session()
         self._last_used = datetime.now()
         try:
@@ -89,12 +100,24 @@ class CloudDatabase:
             pass
 
     async def get(self, model, *args, **kwargs):
-        return await self.execute(select(model).filter_by(*args, **kwargs))
+        result = await self.execute(select(model).filter_by(*args, **kwargs))
+        return result.scalars().first()
 
     async def add(self, obj):
-        await self._run_in_session(lambda s, o: (s.add(o), s.commit()), obj)
-        # Mirror to local database
-        await local_db.add(obj)
+        # Create a copy of the object for cloud database
+        cloud_obj = type(obj)(
+            ** {col.name: getattr(obj, col.name)
+               for col in obj.__table__.columns
+               if hasattr(obj, col.name)}
+        )
+        await self._run_in_session(lambda s, o: (s.add(o), s.commit()), cloud_obj)
+        # Mirror to local database with a separate object instance
+        local_obj = type(obj)(
+            ** {col.name: getattr(obj, col.name)
+               for col in obj.__table__.columns
+               if hasattr(obj, col.name)}
+        )
+        await local_db.add(local_obj)
 
     async def add_all(self, objs):
         """Add multiple objects"""
@@ -102,14 +125,42 @@ class CloudDatabase:
             await self.add(obj)
 
     async def delete(self, obj):
-        await self._run_in_session(lambda s, o: (s.delete(o), s.commit()), obj)
-        # Mirror to local database
-        await local_db.delete(obj)
+        # Get the primary key attribute name
+        pk_column = obj.__table__.primary_key.columns.values()[0]
+        pk_name = pk_column.name
+        pk_value = getattr(obj, pk_name)
+
+        # Delete from cloud database by querying within session
+        await self._run_in_session(
+            lambda s, pk, model: (s.execute(
+                model.__table__.delete().where(getattr(model, pk) == pk_value)
+            ), s.commit()),
+            pk_name, type(obj)
+        )
+        # Delete from local database
+        await local_db._run_in_session(
+            lambda s, pk, model: (s.execute(
+                model.__table__.delete().where(getattr(model, pk) == pk_value)
+            ), s.commit()),
+            pk_name, type(obj)
+        )
 
     async def merge(self, obj):
-        await self._run_in_session(lambda s, o: (s.merge(o), s.commit()), obj)
-        # Mirror to local database
-        await local_db.merge(obj)
+        # Create a completely new object instance FIRST to avoid session conflicts
+        obj_copy = type(obj)(
+            ** {col.name: getattr(obj, col.name)
+               for col in obj.__table__.columns
+               if hasattr(obj, col.name)}
+        )
+        # Now merge the copy to cloud database (copy is not attached to any session)
+        await self._run_in_session(lambda s, o: (s.merge(o), s.commit()), obj_copy)
+        # Create another copy for local database
+        local_obj = type(obj)(
+            ** {col.name: getattr(obj, col.name)
+               for col in obj.__table__.columns
+               if hasattr(obj, col.name)}
+        )
+        await local_db.merge(local_obj)
 
     async def commit(self):
         await self._run_in_session(lambda s: s.commit())
@@ -121,24 +172,30 @@ class CloudDatabase:
 
     # AIProvider methods
     async def get_provider_by_name(self, name: str):
-        """Lấy provider theo tên"""
+        """Get provider by name"""
         return await self.get(AIProvider, name=name)
 
     async def get_default_provider(self):
-        """Lấy provider mặc định từ DefaultModel"""
-        result = await self.execute(select(DefaultModel).filter_by(feature="default_provider"))
+        """Get default provider from DefaultModel"""
+        result = await self.execute(
+            select(DefaultModel).filter_by(feature="default_provider")
+        )
         default_model = result.scalars().first()
         if default_model and default_model.provider_name:
             return await self.get_provider_by_name(default_model.provider_name)
         return None
 
     async def set_default_provider(self, provider: AIProvider):
-        """Đặt provider mặc định trong DefaultModel"""
-        result = await self.execute(select(DefaultModel).filter_by(feature="default_provider"))
+        """Set default provider in DefaultModel"""
+        result = await self.execute(
+            select(DefaultModel).filter_by(feature="default_provider")
+        )
         default_model = result.scalars().first()
-        
+
         if not default_model:
-            default_model = DefaultModel(feature="default_provider", provider_name=provider.name)
+            default_model = DefaultModel(
+                feature="default_provider", provider_name=provider.name
+            )
             await self.add(default_model)
         else:
             default_model.provider_name = provider.name
@@ -146,21 +203,27 @@ class CloudDatabase:
 
     # DefaultModel methods
     async def get_default_model(self, feature: str):
-        """Lấy model mặc định cho một feature"""
+        """Get default model for a feature"""
         result = await self.execute(select(DefaultModel).filter_by(feature=feature))
         return result.scalars().first()
 
-    async def set_default_model(self, feature: str, provider_name: str = None, model: str = None, config: dict = None):
-        """Đặt model mặc định cho một feature"""
+    async def set_default_model(
+        self,
+        feature: str,
+        provider_name: str = None,
+        model: str = None,
+        config: dict = None,
+    ):
+        """Set default model for a feature"""
         result = await self.execute(select(DefaultModel).filter_by(feature=feature))
         default_model = result.scalars().first()
-        
+
         if not default_model:
             default_model = DefaultModel(
                 feature=feature,
                 provider_name=provider_name,
                 model=model,
-                config=config or {}
+                config=config or {},
             )
             await self.add(default_model)
         else:
@@ -174,16 +237,22 @@ class CloudDatabase:
 
     # TelegramUser (Owner) methods
     async def get_user(self, user_id: int):
-        """Lấy user theo user_id"""
+        """Get user by user_id"""
         return await self.get(TelegramUser, id=user_id)
 
     async def is_owner(self, user_id: int) -> bool:
-        """Kiểm tra user có phải là owner không"""
+        """Check if user is owner"""
         user = await self.get_user(user_id)
         return user is not None and user.is_owner if user else False
 
-    async def set_owner(self, user_id: int, is_owner: bool = True, username: str = None, full_name: str = None):
-        """Đặt quyền owner cho user"""
+    async def set_owner(
+        self,
+        user_id: int,
+        is_owner: bool = True,
+        username: str = None,
+        full_name: str = None,
+    ):
+        """Set owner privilege for user"""
         user = await self.get_user(user_id)
         if user:
             user.is_owner = is_owner
@@ -203,16 +272,18 @@ class CloudDatabase:
             )
             await self.add(user)
 
-    async def add_owner(self, user_id: int, username: str = None, full_name: str = None):
-        """Thêm owner mới"""
+    async def add_owner(
+        self, user_id: int, username: str = None, full_name: str = None
+    ):
+        """Add new owner"""
         await self.set_owner(user_id, True, username, full_name)
 
     async def remove_owner(self, user_id: int):
-        """Xóa quyền owner"""
+        """Remove owner privilege"""
         await self.set_owner(user_id, False)
 
     async def get_all_owners(self):
-        """Lấy tất cả owners"""
+        """Get all owners"""
         result = await self.execute(select(TelegramUser).filter_by(is_owner=True))
         return result.scalars().all()
 

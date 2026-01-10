@@ -1,7 +1,7 @@
 import asyncio
 
-from ai.text import localize
-from database.local import local_db
+from app.ai.text import localize
+from app.database.local import local_db
 from pyrogram import Client, enums, filters, types
 
 basic_buttons = [
@@ -13,7 +13,7 @@ basic_buttons = [
 
 @Client.on_message(filters.command(["start", "help"]))  # type: ignore
 async def start(client: Client, message: types.Message):
-    """Xử lý lệnh start/help"""
+    """Handle start/help command"""
     markup = types.InlineKeyboardMarkup([[button for button in basic_buttons]])
     welcome_text = await localize(
         "Welcome to StarChatter.\n\nAvailable commands:\n\n/image [prompt] - Generate an image (NSFW non-blocked).\n/poem [prompt] - Generate a poem.",
@@ -24,7 +24,7 @@ async def start(client: Client, message: types.Message):
 
 @Client.on_message(filters.command("clear"))  # type: ignore
 async def clear_handler(client: Client, message: types.Message):
-    """Xóa lịch sử trò chuyện"""
+    """Clear conversation history"""
     if message.chat.id < 0:
         member = await message.chat.get_member(message.from_user.id)
         if member.status not in [
@@ -39,10 +39,7 @@ async def clear_handler(client: Client, message: types.Message):
             return
     await message.reply_chat_action(enums.ChatAction.TYPING)
     chat_id = message.chat.id
-    
-    # Xóa conversation từ local database
-    await local_db.delete_conversation(chat_id)
-    
+
     cleared_text = await localize(
         "__Conversation cleared. The bot now forgets everything about you.__",
         user_id=message.from_user.id,
